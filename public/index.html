@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InsertaBot</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #1a1a1a;
+      --border: #252525;
+      --text: #e4e4e4;
+      --text-muted: #666;
+      --accent: #7c6af7;
+      --accent-border: rgba(124, 106, 247, 0.35);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    header svg { flex-shrink: 0; }
+    header h1 { font-size: 1rem; font-weight: 600; letter-spacing: -0.01em; }
+    .status {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #333;
+      transition: background 0.4s;
+    }
+    .dot.on { background: #4ade80; box-shadow: 0 0 6px #4ade8066; }
+
+    /* ── Messages ── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .empty-state {
+      margin: auto;
+      text-align: center;
+      color: var(--text-muted);
+      user-select: none;
+    }
+    .empty-state h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .empty-state p { font-size: 0.88rem; line-height: 1.6; max-width: 300px; }
+
+    .msg-row {
+      display: flex;
+      gap: 10px;
+      max-width: 720px;
+      width: 100%;
+      margin: 0 auto;
+      animation: slide-in 0.18s ease;
+    }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: none; }
+    }
+    .msg-row.user { flex-direction: row-reverse; }
+
+    .avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+    }
+    .msg-row.user .avatar { background: var(--accent); color: #fff; }
+    .msg-row.assistant .avatar { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
+
+    .bubble {
+      padding: 9px 13px;
+      border-radius: 12px;
+      line-height: 1.65;
+      font-size: 0.9rem;
+      max-width: calc(100% - 44px);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg-row.user .bubble {
+      background: var(--surface2);
+      border: 1px solid var(--accent-border);
+    }
+    .msg-row.assistant .bubble {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+    }
+
+    /* blinking cursor during streaming */
+    .cursor {
+      display: inline-block;
+      width: 2px; height: 0.9em;
+      background: var(--accent);
+      margin-left: 1px;
+      vertical-align: text-bottom;
+      animation: blink 0.9s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* tool call indicator */
+    .tool-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(124, 106, 247, 0.12);
+      border: 1px solid rgba(124, 106, 247, 0.25);
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 0.78rem;
+      color: #a89cf7;
+      margin: 2px 0;
+    }
+
+    /* ── Input area ── */
+    .input-wrap {
+      flex-shrink: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 14px 16px;
+    }
+    .input-inner {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    textarea {
+      flex: 1;
+      min-height: 42px;
+      max-height: 160px;
+      padding: 10px 13px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font: inherit;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--text-muted); }
+    textarea:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    button#send {
+      height: 42px;
+      padding: 0 18px;
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font: inherit;
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.2s;
+      flex-shrink: 0;
+    }
+    button#send:disabled { opacity: 0.35; cursor: not-allowed; }
+    button#send:not(:disabled):hover { opacity: 0.82; }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c6af7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="10" rx="2"/>
+    <circle cx="12" cy="5" r="2"/>
+    <line x1="12" y1="7" x2="12" y2="11"/>
+    <line x1="8" y1="15" x2="8" y2="17"/>
+    <line x1="16" y1="15" x2="16" y2="17"/>
+  </svg>
+  <h1>InsertaBot</h1>
+  <div class="status">
+    <div class="dot" id="dot"></div>
+    <span id="status-text">Connecting…</span>
+  </div>
+</header>
+
+<div id="messages">
+  <div class="empty-state" id="empty">
+    <h2>InsertaBot</h2>
+    <p>Ask me anything. I can check the weather, do calculations, and schedule tasks for you.</p>
+  </div>
+</div>
+
+<div class="input-wrap">
+  <div class="input-inner">
+    <textarea id="input" placeholder="Message InsertaBot…" rows="1" disabled></textarea>
+    <button id="send" disabled>Send</button>
+  </div>
+</div>
+
+<script>
+  const msgList   = document.getElementById('messages');
+  const inputEl   = document.getElementById('input');
+  const sendBtn   = document.getElementById('send');
+  const dot       = document.getElementById('dot');
+  const statusTxt = document.getElementById('status-text');
+  const emptyEl   = document.getElementById('empty');
+
+  // ── Per-browser session ──────────────────────────────────────────────────
+  let instanceId = localStorage.getItem('ib_instance');
+  if (!instanceId) {
+    instanceId = crypto.randomUUID();
+    localStorage.setItem('ib_instance', instanceId);
+  }
+
+  // ── State ────────────────────────────────────────────────────────────────
+  let messages   = [];   // full conversation history kept in sync with agent
+  let streaming  = null; // { id, bubbleEl, text }
+  let busy       = false;
+  let ws         = null;
+  let retryDelay = 1000;
+
+  // ── UI helpers ───────────────────────────────────────────────────────────
+  function setConnected(yes) {
+    dot.className      = 'dot' + (yes ? ' on' : '');
+    statusTxt.textContent = yes ? 'Connected' : 'Reconnecting…';
+    inputEl.disabled   = !yes || busy;
+    sendBtn.disabled   = !yes || busy;
+  }
+
+  function setBusy(yes) {
+    busy = yes;
+    inputEl.disabled = yes;
+    sendBtn.disabled = yes;
+  }
+
+  function hideEmpty() {
+    if (emptyEl) emptyEl.remove();
+  }
+
+  function scrollBottom() {
+    msgList.scrollTop = msgList.scrollHeight;
+  }
+
+  function esc(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function addRow(role, id) {
+    hideEmpty();
+    const avatar = role === 'user' ? 'You' : 'AI';
+    const row = document.createElement('div');
+    row.className = `msg-row ${role}`;
+    row.dataset.id = id;
+    row.innerHTML = `<div class="avatar">${esc(avatar)}</div><div class="bubble"></div>`;
+    msgList.appendChild(row);
+    scrollBottom();
+    return row.querySelector('.bubble');
+  }
+
+  function setBubbleText(bubbleEl, text) {
+    bubbleEl.textContent = text;
+  }
+
+  // Re-render all persisted messages (used after agent sync)
+  function renderAll() {
+    const wasEmpty = messages.length === 0;
+    msgList.innerHTML = wasEmpty
+      ? '<div class="empty-state" id="empty"><h2>InsertaBot</h2><p>Ask me anything. I can check the weather, do calculations, and schedule tasks for you.</p></div>'
+      : '';
+    for (const m of messages) {
+      const text = extractText(m);
+      const bubble = addRow(m.role, m.id);
+      setBubbleText(bubble, text);
+    }
+    scrollBottom();
+  }
+
+  function extractText(msg) {
+    if (typeof msg.content === 'string') return msg.content;
+    if (Array.isArray(msg.parts)) {
+      return msg.parts.filter(p => p.type === 'text').map(p => p.text).join('');
+    }
+    return '';
+  }
+
+  // ── Streaming helpers ────────────────────────────────────────────────────
+  function startStream(msgId) {
+    if (streaming) finalizeStream();
+    const bubble = addRow('assistant', msgId);
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    bubble.appendChild(cursor);
+    streaming = { id: msgId, bubbleEl: bubble, text: '', cursor };
+  }
+
+  function appendChunk(delta) {
+    if (!streaming) return;
+    streaming.text += delta;
+    const { bubbleEl, cursor, text } = streaming;
+    bubbleEl.textContent = text;
+    bubbleEl.appendChild(cursor);
+    scrollBottom();
+  }
+
+  function finalizeStream() {
+    if (!streaming) return;
+    const { bubbleEl, cursor, text, id } = streaming;
+    if (bubbleEl.contains(cursor)) bubbleEl.removeChild(cursor);
+    bubbleEl.textContent = text;
+    // Push finalized assistant message into local history
+    if (!messages.some(m => m.id === id)) {
+      messages.push({
+        id,
+        role: 'assistant',
+        content: text,
+        parts: [{ type: 'text', text }],
+        createdAt: new Date().toISOString(),
+      });
+    }
+    streaming = null;
+    setBusy(false);
+  }
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}/agents/ChatAgent/${instanceId}`);
+
+    ws.onopen = () => {
+      setConnected(true);
+      retryDelay = 1000;
+    };
+
+    ws.onclose = () => {
+      setConnected(false);
+      finalizeStream();
+      setBusy(false);
+      ws = null;
+      setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 16000);
+    };
+
+    ws.onerror = () => ws.close();
+
+    ws.onmessage = (evt) => {
+      let data;
+      try { data = JSON.parse(evt.data); } catch { return; }
+      onAgentMessage(data);
+    };
+  }
+
+  function onAgentMessage(data) {
+    switch (data.type) {
+
+      // Full message history pushed by agent (on connect or after a turn)
+      case 'cf_agent_chat_messages':
+        if (Array.isArray(data.messages) && !streaming) {
+          messages = data.messages;
+          renderAll();
+        }
+        break;
+
+      // Streaming chat response chunks
+      case 'cf_agent_use_chat_response': {
+        const { body, done, id: reqId } = data;
+
+        if (body) {
+          let chunk;
+          try { chunk = JSON.parse(body); } catch { break; }
+
+          switch (chunk.type) {
+            case 'start':
+              startStream(chunk.messageId ?? reqId);
+              break;
+            case 'text-delta':
+              if (!streaming) startStream(reqId); // safety
+              appendChunk(chunk.textDelta ?? '');
+              break;
+            case 'finish':
+              finalizeStream();
+              break;
+            case 'error':
+              if (streaming) {
+                streaming.text += `\n[Error: ${chunk.errorText ?? 'unknown'}]`;
+                finalizeStream();
+              }
+              break;
+          }
+        }
+
+        if (done) finalizeStream();
+        break;
+      }
+
+      // Base-agent state (may carry messages on reconnect)
+      case 'cf_agent_state':
+        if (data.state?.messages && !streaming) {
+          messages = data.state.messages;
+          renderAll();
+        }
+        break;
+    }
+  }
+
+  // ── Sending ───────────────────────────────────────────────────────────────
+  function send() {
+    const text = inputEl.value.trim();
+    if (!text || busy || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    const userMsg = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: text,
+      parts: [{ type: 'text', text }],
+      createdAt: new Date().toISOString(),
+    };
+    messages.push(userMsg);
+
+    // Show user message immediately
+    const bubble = addRow('user', userMsg.id);
+    setBubbleText(bubble, text);
+    scrollBottom();
+
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+    setBusy(true);
+
+    ws.send(JSON.stringify({
+      type: 'cf_agent_use_chat_request',
+      id: crypto.randomUUID(),
+      init: {
+        method: 'POST',
+        body: JSON.stringify({
+          messages,
+          trigger: 'submit-message',
+        }),
+      },
+    }));
+  }
+
+  // ── Input events ──────────────────────────────────────────────────────────
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+  });
+
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  });
+
+  sendBtn.addEventListener('click', send);
+
+  // ── Boot ──────────────────────────────────────────────────────────────────
+  connect();
+</script>
+</body>
+</html>
