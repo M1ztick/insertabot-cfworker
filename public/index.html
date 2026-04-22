@@ -363,7 +363,7 @@
   // ── WebSocket ─────────────────────────────────────────────────────────────
   function connect() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${location.host}/agents/ChatAgent/${instanceId}`);
+    ws = new WebSocket(`${proto}//${location.host}/agents/chat-agent/${instanceId}`);
 
     ws.onopen = () => {
       setConnected(true);
