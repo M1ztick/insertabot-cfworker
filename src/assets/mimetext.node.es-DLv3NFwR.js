@@ -7518,7 +7518,7 @@ var require_shared_store = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	(store.versions || (store.versions = [])).push({
 		version: "3.49.0",
 		mode: IS_PURE ? "pure" : "global",
-		copyright: "© 2013–2025 Denis Pushkarev (zloirock.ru), 2025–2026 CoreJS Company (core-js.io). All rights reserved.",
+		"copyright": "© 2013–2025 Denis Pushkarev (zloirock.ru), 2025–2026 CoreJS Company (core-js.io). All rights reserved.",
 		license: "https://github.com/zloirock/core-js/blob/v3.49.0/LICENSE",
 		source: "https://github.com/zloirock/core-js"
 	});

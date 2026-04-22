@@ -20633,8 +20633,8 @@ var WorkersAIImageModel = class {
 function getDimensionsFromSizeString(size) {
 	const [width, height] = size?.split("x") ?? [void 0, void 0];
 	return {
-		height: parseInteger(height),
-		width: parseInteger(width)
+		"block-size": parseInteger(height),
+		"inline-size": parseInteger(width)
 	};
 }
 function parseInteger(value) {
