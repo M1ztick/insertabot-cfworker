@@ -52,6 +52,19 @@
       transition: background 0.4s;
     }
     .dot.on { background: #4ade80; box-shadow: 0 0 6px #4ade8066; }
+    .btn-ghost {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      font: inherit;
+      font-size: 0.78rem;
+      padding: 5px 11px;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+      white-space: nowrap;
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
 
     /* ── Messages ── */
     #messages {
@@ -123,6 +136,14 @@
       background: var(--surface2);
       border: 1px solid var(--border);
     }
+    .msg-img {
+      max-inline-size: 100%;
+      max-block-size: 260px;
+      border-radius: 8px;
+      display: block;
+      margin-block-start: 6px;
+      cursor: pointer;
+    }
 
     /* blinking cursor during streaming */
     .cursor {
@@ -154,8 +175,46 @@
       flex-shrink: 0;
       background: var(--surface);
       border-block-start: 1px solid var(--border);
-      padding: 14px 16px;
+      padding: 10px 16px 14px;
     }
+    #preview-strip {
+      display: none;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-inline-size: 720px;
+      margin: 0 auto 10px;
+    }
+    .preview-thumb {
+      position: relative;
+    }
+    .preview-thumb img {
+      block-size: 60px;
+      inline-size: 60px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: block;
+    }
+    .preview-remove {
+      position: absolute;
+      inset-block-start: -6px;
+      inset-inline-end: -6px;
+      inline-size: 18px;
+      block-size: 18px;
+      background: #444;
+      border: none;
+      border-radius: 50%;
+      color: var(--text);
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      line-height: 1;
+    }
+    .preview-remove:hover { background: #666; }
     .input-inner {
       max-inline-size: 720px;
       margin: 0 auto;
@@ -163,6 +222,22 @@
       gap: 8px;
       align-items: flex-end;
     }
+    button#attach {
+      block-size: 42px;
+      inline-size: 42px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    button#attach:hover { border-color: var(--accent); color: var(--text); }
+    button#attach:disabled { opacity: 0.35; cursor: not-allowed; }
     textarea {
       flex: 1;
       min-block-size: 42px;
@@ -200,6 +275,24 @@
     }
     button#send:disabled { opacity: 0.35; cursor: not-allowed; }
     button#send:not(:disabled):hover { opacity: 0.82; }
+
+    /* ── Lightbox ── */
+    #lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: zoom-out;
+    }
+    #lightbox.open { display: flex; }
+    #lightbox img {
+      max-inline-size: 92vw;
+      max-block-size: 92vh;
+      border-radius: 8px;
+    }
   </style>
 </head>
 <body>
@@ -217,29 +310,44 @@
     <div class="dot" id="dot"></div>
     <span id="status-text">Connecting…</span>
   </div>
+  <button class="btn-ghost" id="new-chat">New chat</button>
 </header>
 
 <div id="messages">
   <div class="empty-state" id="empty">
     <h2>InsertaBot</h2>
-    <p>Ask me anything. I can check the weather, do calculations, and schedule tasks for you.</p>
+    <p>Ask me anything. I can check the weather, do calculations, schedule tasks, and analyze images.</p>
   </div>
 </div>
 
+<div id="lightbox"><img id="lightbox-img" src="" alt=""></div>
+
 <div class="input-wrap">
+  <div id="preview-strip"></div>
   <div class="input-inner">
+    <button id="attach" title="Attach image" disabled>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+      </svg>
+    </button>
+    <input type="file" id="file-input" accept="image/*" multiple hidden>
     <textarea id="input" placeholder="Message InsertaBot…" rows="1" disabled></textarea>
     <button id="send" disabled>Send</button>
   </div>
 </div>
 
 <script>
-  const msgList   = document.getElementById('messages');
-  const inputEl   = document.getElementById('input');
-  const sendBtn   = document.getElementById('send');
-  const dot       = document.getElementById('dot');
-  const statusTxt = document.getElementById('status-text');
-  const emptyEl   = document.getElementById('empty');
+  const msgList      = document.getElementById('messages');
+  const inputEl      = document.getElementById('input');
+  const sendBtn      = document.getElementById('send');
+  const attachBtn    = document.getElementById('attach');
+  const fileInputEl  = document.getElementById('file-input');
+  const previewStrip = document.getElementById('preview-strip');
+  const newChatBtn   = document.getElementById('new-chat');
+  const dot          = document.getElementById('dot');
+  const statusTxt    = document.getElementById('status-text');
+  const lightbox     = document.getElementById('lightbox');
+  const lightboxImg  = document.getElementById('lightbox-img');
 
   // ── Per-browser session ──────────────────────────────────────────────────
   let instanceId = localStorage.getItem('ib_instance');
@@ -249,28 +357,32 @@
   }
 
   // ── State ────────────────────────────────────────────────────────────────
-  let messages   = [];   // full conversation history kept in sync with agent
-  let streaming  = null; // { id, bubbleEl, text }
-  let busy       = false;
-  let ws         = null;
-  let retryDelay = 1000;
+  let messages      = [];
+  let pendingImages = [];   // [{ dataUrl, mimeType, filename }]
+  let streaming     = null; // { id, bubbleEl, text }
+  let busy          = false;
+  let ws            = null;
+  let retryDelay    = 1000;
 
   // ── UI helpers ───────────────────────────────────────────────────────────
   function setConnected(yes) {
-    dot.className      = 'dot' + (yes ? ' on' : '');
+    dot.className         = 'dot' + (yes ? ' on' : '');
     statusTxt.textContent = yes ? 'Connected' : 'Reconnecting…';
-    inputEl.disabled   = !yes || busy;
-    sendBtn.disabled   = !yes || busy;
+    inputEl.disabled      = !yes || busy;
+    sendBtn.disabled      = !yes || busy;
+    attachBtn.disabled    = !yes || busy;
   }
 
   function setBusy(yes) {
     busy = yes;
-    inputEl.disabled = yes;
-    sendBtn.disabled = yes;
+    inputEl.disabled   = yes;
+    sendBtn.disabled   = yes;
+    attachBtn.disabled = yes;
   }
 
   function hideEmpty() {
-    if (emptyEl) emptyEl.remove();
+    const el = document.getElementById('empty');
+    if (el) el.remove();
   }
 
   function scrollBottom() {
@@ -296,31 +408,95 @@
     return row.querySelector('.bubble');
   }
 
-  function setBubbleText(bubbleEl, text) {
-    bubbleEl.textContent = text;
+  function extractText(msg) {
+    if (Array.isArray(msg.parts)) {
+      const txt = msg.parts.filter(p => p.type === 'text').map(p => p.text).join('');
+      if (txt) return txt;
+    }
+    if (typeof msg.content === 'string') return msg.content;
+    return '';
+  }
+
+  function setBubbleContent(bubbleEl, msg) {
+    bubbleEl.innerHTML = '';
+    const text = extractText(msg);
+    if (text) {
+      const span = document.createElement('span');
+      span.textContent = text;
+      bubbleEl.appendChild(span);
+    }
+    const fileParts = Array.isArray(msg.parts) ? msg.parts.filter(p => p.type === 'file') : [];
+    for (const fp of fileParts) {
+      const img = document.createElement('img');
+      img.src = fp.url;
+      img.className = 'msg-img';
+      img.alt = fp.filename ?? 'image';
+      img.addEventListener('click', () => openLightbox(fp.url));
+      bubbleEl.appendChild(img);
+    }
   }
 
   // Re-render all persisted messages (used after agent sync)
   function renderAll() {
     const wasEmpty = messages.length === 0;
     msgList.innerHTML = wasEmpty
-      ? '<div class="empty-state" id="empty"><h2>InsertaBot</h2><p>Ask me anything. I can check the weather, do calculations, and schedule tasks for you.</p></div>'
+      ? '<div class="empty-state" id="empty"><h2>InsertaBot</h2><p>Ask me anything. I can check the weather, do calculations, schedule tasks, and analyze images.</p></div>'
       : '';
     for (const m of messages) {
-      const text = extractText(m);
       const bubble = addRow(m.role, m.id);
-      setBubbleText(bubble, text);
+      setBubbleContent(bubble, m);
     }
     scrollBottom();
   }
 
-  function extractText(msg) {
-    if (typeof msg.content === 'string') return msg.content;
-    if (Array.isArray(msg.parts)) {
-      return msg.parts.filter(p => p.type === 'text').map(p => p.text).join('');
-    }
-    return '';
+  // ── Lightbox ──────────────────────────────────────────────────────────────
+  function openLightbox(src) {
+    lightboxImg.src = src;
+    lightbox.classList.add('open');
   }
+  lightbox.addEventListener('click', () => lightbox.classList.remove('open'));
+
+  // ── Image preview strip ───────────────────────────────────────────────────
+  function updatePreviewStrip() {
+    previewStrip.innerHTML = '';
+    previewStrip.style.display = pendingImages.length ? 'flex' : 'none';
+    pendingImages.forEach((img, i) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'preview-thumb';
+      const imgEl = document.createElement('img');
+      imgEl.src = img.dataUrl;
+      imgEl.alt = img.filename;
+      const rm = document.createElement('button');
+      rm.className = 'preview-remove';
+      rm.textContent = '×';
+      rm.title = 'Remove';
+      rm.addEventListener('click', () => { pendingImages.splice(i, 1); updatePreviewStrip(); });
+      wrap.appendChild(imgEl);
+      wrap.appendChild(rm);
+      previewStrip.appendChild(wrap);
+    });
+  }
+
+  function readFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve({ dataUrl: reader.result, mimeType: file.type || 'image/jpeg', filename: file.name });
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  attachBtn.addEventListener('click', () => fileInputEl.click());
+
+  fileInputEl.addEventListener('change', async () => {
+    const files = Array.from(fileInputEl.files || []);
+    for (const file of files) {
+      if (pendingImages.length >= 4) break;
+      try { pendingImages.push(await readFile(file)); } catch {}
+    }
+    fileInputEl.value = '';
+    updatePreviewStrip();
+  });
 
   // ── Streaming helpers ────────────────────────────────────────────────────
   function startStream(msgId) {
@@ -346,7 +522,6 @@
     const { bubbleEl, cursor, text, id } = streaming;
     if (bubbleEl.contains(cursor)) bubbleEl.removeChild(cursor);
     bubbleEl.textContent = text;
-    // Push finalized assistant message into local history
     if (!messages.some(m => m.id === id)) {
       messages.push({
         id,
@@ -359,6 +534,20 @@
     streaming = null;
     setBusy(false);
   }
+
+  // ── New conversation ──────────────────────────────────────────────────────
+  function newConversation() {
+    if (streaming) finalizeStream();
+    messages = [];
+    pendingImages = [];
+    updatePreviewStrip();
+    instanceId = crypto.randomUUID();
+    localStorage.setItem('ib_instance', instanceId);
+    renderAll();
+    if (ws) ws.close(); // onclose reconnects with new instanceId
+  }
+
+  newChatBtn.addEventListener('click', newConversation);
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
   function connect() {
@@ -391,7 +580,6 @@
   function onAgentMessage(data) {
     switch (data.type) {
 
-      // Full message history pushed by agent (on connect or after a turn)
       case 'cf_agent_chat_messages':
         if (Array.isArray(data.messages) && !streaming) {
           messages = data.messages;
@@ -399,7 +587,6 @@
         }
         break;
 
-      // Streaming chat response chunks
       case 'cf_agent_use_chat_response': {
         const { body, done, id: reqId } = data;
 
@@ -412,7 +599,7 @@
               startStream(chunk.messageId ?? reqId);
               break;
             case 'text-delta':
-              if (!streaming) startStream(reqId); // safety
+              if (!streaming) startStream(reqId);
               appendChunk(chunk.delta ?? chunk.textDelta ?? '');
               break;
             case 'finish':
@@ -431,7 +618,6 @@
         break;
       }
 
-      // Base-agent state (may carry messages on reconnect)
       case 'cf_agent_state':
         if (data.state?.messages && !streaming) {
           messages = data.state.messages;
@@ -444,22 +630,29 @@
   // ── Sending ───────────────────────────────────────────────────────────────
   function send() {
     const text = inputEl.value.trim();
-    if (!text || busy || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if ((!text && !pendingImages.length) || busy || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    const parts = [];
+    if (text) parts.push({ type: 'text', text });
+    for (const img of pendingImages) {
+      parts.push({ type: 'file', mediaType: img.mimeType, url: img.dataUrl, filename: img.filename });
+    }
 
     const userMsg = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: text,
-      parts: [{ type: 'text', text }],
+      content: text || ' ',
+      parts,
       createdAt: new Date().toISOString(),
     };
     messages.push(userMsg);
 
-    // Show user message immediately
     const bubble = addRow('user', userMsg.id);
-    setBubbleText(bubble, text);
+    setBubbleContent(bubble, userMsg);
     scrollBottom();
 
+    pendingImages = [];
+    updatePreviewStrip();
     inputEl.value = '';
     inputEl.style.height = 'auto';
     setBusy(true);
@@ -469,10 +662,7 @@
       id: crypto.randomUUID(),
       init: {
         method: 'POST',
-        body: JSON.stringify({
-          messages,
-          trigger: 'submit-message',
-        }),
+        body: JSON.stringify({ messages, trigger: 'submit-message' }),
       },
     }));
   }
