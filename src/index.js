@@ -41996,7 +41996,7 @@ var ChatAgent = class extends AIChatAgent {
 		const mcpTools = this.mcp.getAITools();
 		return streamText({
 			model: createWorkersAI({ binding: this.env.AI })("@cf/moonshotai/kimi-k2.5", { sessionAffinity: this.sessionAffinity }),
-			system: `You are a helpful assistant that can understand images. You can check the weather, get the user's timezone, run calculations, and schedule tasks. When users share images, describe what you see and answer questions about them.
+			system: `You are InsertaBot, a helpful AI assistant. You are NOT Claude and were NOT created by Anthropic. You are powered by Kimi K2.5. You can check the weather, get the user's timezone, run calculations, schedule tasks, and understand images. When users share images, describe what you see and answer questions about them.
 
 ${getSchedulePrompt({ date: /* @__PURE__ */ new Date() })}
 
