@@ -1,760 +1,1192 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>InsertaBot</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js" crossorigin="anonymous"></script>
-  <style>
-    :root {
-      --bg: #0a0a0a;
-      --surface: #111111;
-      --surface2: #1a1a1a;
-      --border: #252525;
-      --text: #e4e4e4;
-      --text-muted: #666;
-      --accent: #7c6af7;
-      --accent-border: rgba(124, 106, 247, 0.35);
-    }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { block-size: 100%; overflow: hidden; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
-    }
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>InsertaBot</title>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			:root {
+				--bg: #080b12;
+				--surface: #0e1320;
+				--surface2: #141a2e;
+				--border: rgba(255, 255, 255, 0.07);
+				--border-cyan: rgba(0, 245, 212, 0.3);
+				--border-magenta: rgba(245, 0, 160, 0.35);
+				--text: #e8eaf2;
+				--text-muted: #6b7399;
+				--cyan: #00f5d4;
+				--magenta: #f500a0;
+				--accent: #00f5d4;
+				--accent-dim: rgba(0, 245, 212, 0.12);
+			}
 
-    /* ── Header ── */
-    header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 20px;
-      border-block-end: 1px solid var(--border);
-      background: var(--surface);
-      flex-shrink: 0;
-    }
-    header svg { flex-shrink: 0; }
-    header h1 { font-size: 1rem; font-weight: 600; letter-spacing: -0.01em; }
-    .status {
-      margin-inline-start: auto;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.78rem;
-      color: var(--text-muted);
-    }
-    .dot {
-      inline-size: 7px; block-size: 7px;
-      border-radius: 50%;
-      background: #333;
-      transition: background 0.4s;
-    }
-    .dot.on { background: #4ade80; box-shadow: 0 0 6px #4ade8066; }
-    .btn-ghost {
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text-muted);
-      font: inherit;
-      font-size: 0.78rem;
-      padding: 5px 11px;
-      cursor: pointer;
-      transition: border-color 0.2s, color 0.2s;
-      white-space: nowrap;
-    }
-    .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+			html,
+			body {
+				block-size: 100%;
+				overflow: hidden;
+			}
 
-    /* ── Messages ── */
-    #messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 28px 16px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border) transparent;
-    }
-    .empty-state {
-      margin: auto;
-      text-align: center;
-      color: var(--text-muted);
-      user-select: none;
-    }
-    .empty-state h2 {
-      font-size: 1.4rem;
-      font-weight: 600;
-      color: var(--text);
-      margin-block-end: 8px;
-    }
-    .empty-state p { font-size: 0.88rem; line-height: 1.6; max-inline-size: 300px; }
+			body {
+				font-family:
+					'Syne',
+					-apple-system,
+					BlinkMacSystemFont,
+					sans-serif;
+				background: var(--bg);
+				color: var(--text);
+				display: flex;
+				flex-direction: column;
+			}
 
-    .msg-row {
-      display: flex;
-      gap: 10px;
-      max-inline-size: 720px;
-      inline-size: 100%;
-      margin: 0 auto;
-      animation: slide-in 0.18s ease;
-    }
-    @keyframes slide-in {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: none; }
-    }
-    .msg-row.user { flex-direction: row-reverse; }
+			/* ── Grid background ── */
+			body::before {
+				content: '';
+				position: fixed;
+				inset: 0;
+				background-image:
+					linear-gradient(rgba(0, 245, 212, 0.025) 1px, transparent 1px),
+					linear-gradient(90deg, rgba(0, 245, 212, 0.025) 1px, transparent 1px);
+				background-size: 40px 40px;
+				pointer-events: none;
+				z-index: 0;
+			}
 
-    .avatar {
-      inline-size: 30px; block-size: 30px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      font-size: 0.75rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-block-start: 2px;
-    }
-    .msg-row.user .avatar { background: var(--accent); color: #fff; }
-    .msg-row.assistant .avatar { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
+			/* ── Header ── */
+			header {
+				position: relative;
+				z-index: 1;
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				padding: 14px 20px;
+				border-block-end: 1px solid var(--border);
+				background: var(--surface);
+				flex-shrink: 0;
+			}
 
-    .bubble {
-      padding: 9px 13px;
-      border-radius: 12px;
-      line-height: 1.65;
-      font-size: 0.9rem;
-      max-inline-size: calc(100% - 44px);
-      word-break: break-word;
-    }
-    .msg-row.user .bubble {
-      background: var(--surface2);
-      border: 1px solid var(--accent-border);
-      white-space: pre-wrap;
-    }
-    .msg-row.assistant .bubble {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-    }
+			header svg {
+				flex-shrink: 0;
+			}
 
-    /* markdown content inside assistant bubbles */
-    .bubble-content p { margin-block-end: 0.6em; }
-    .bubble-content p:last-child { margin-block-end: 0; }
-    .bubble-content ul, .bubble-content ol { padding-inline-start: 1.4em; margin-block-end: 0.6em; }
-    .bubble-content li { margin-block-end: 0.2em; }
-    .bubble-content h1, .bubble-content h2, .bubble-content h3,
-    .bubble-content h4, .bubble-content h5, .bubble-content h6 {
-      font-weight: 600; margin-block: 0.8em 0.3em;
-    }
-    .bubble-content h1 { font-size: 1.1em; }
-    .bubble-content h2 { font-size: 1.05em; }
-    .bubble-content h3, .bubble-content h4 { font-size: 1em; }
-    .bubble-content code {
-      background: rgba(255,255,255,0.07);
-      border-radius: 4px;
-      padding: 0.1em 0.35em;
-      font-family: 'Space Mono', 'Fira Code', monospace;
-      font-size: 0.84em;
-    }
-    .bubble-content pre {
-      background: rgba(0,0,0,0.35);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 13px;
-      overflow-x: auto;
-      margin-block-end: 0.6em;
-    }
-    .bubble-content pre code {
-      background: none;
-      padding: 0;
-      font-size: 0.85em;
-    }
-    .bubble-content blockquote {
-      border-inline-start: 3px solid var(--accent);
-      margin-inline-start: 0;
-      padding-inline-start: 0.8em;
-      color: var(--text-muted);
-      margin-block-end: 0.6em;
-    }
-    .bubble-content table {
-      border-collapse: collapse;
-      margin-block-end: 0.6em;
-      inline-size: 100%;
-    }
-    .bubble-content th, .bubble-content td {
-      border: 1px solid var(--border);
-      padding: 4px 8px;
-      text-align: start;
-    }
-    .bubble-content th { background: rgba(255,255,255,0.05); }
-    .bubble-content a { color: var(--accent); }
-    .bubble-content hr { border: none; border-block-start: 1px solid var(--border); margin-block: 0.6em; }
+			header h1 {
+				font-family: 'Space Mono', monospace;
+				font-size: 0.85rem;
+				font-weight: 700;
+				letter-spacing: 0.12em;
+				text-transform: uppercase;
+				color: var(--text);
+			}
 
-    .msg-img {
-      max-inline-size: 100%;
-      max-block-size: 260px;
-      border-radius: 8px;
-      display: block;
-      margin-block-start: 6px;
-      cursor: pointer;
-    }
+			.status {
+				margin-inline-start: auto;
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				font-family: 'Space Mono', monospace;
+				font-size: 0.72rem;
+				color: var(--text-muted);
+			}
 
-    /* blinking cursor during streaming */
-    .cursor {
-      display: inline-block;
-      inline-size: 2px; block-size: 0.9em;
-      background: var(--accent);
-      margin-inline-start: 1px;
-      vertical-align: text-bottom;
-      animation: blink 0.9s step-end infinite;
-    }
-    @keyframes blink { 50% { opacity: 0; } }
+			.dot {
+				inline-size: 7px;
+				block-size: 7px;
+				border-radius: 50%;
+				background: #333;
+				transition: background 0.4s;
+			}
+			.dot.on {
+				background: var(--cyan);
+				box-shadow: 0 0 8px rgba(0, 245, 212, 0.5);
+			}
 
-    /* tool call indicator */
-    .tool-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      background: rgba(124, 106, 247, 0.12);
-      border: 1px solid rgba(124, 106, 247, 0.25);
-      border-radius: 6px;
-      padding: 2px 8px;
-      font-size: 0.78rem;
-      color: #a89cf7;
-      margin: 2px 0;
-    }
+			.btn-ghost {
+				background: none;
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				color: var(--text-muted);
+				font-family: 'Space Mono', monospace;
+				font-size: 0.72rem;
+				padding: 5px 11px;
+				cursor: pointer;
+				transition:
+					border-color 0.2s,
+					color 0.2s;
+				white-space: nowrap;
+				letter-spacing: 0.05em;
+			}
+			.btn-ghost:hover {
+				border-color: var(--border-cyan);
+				color: var(--cyan);
+			}
 
-    /* ── Input area ── */
-    .input-wrap {
-      flex-shrink: 0;
-      background: var(--surface);
-      border-block-start: 1px solid var(--border);
-      padding: 10px 16px 14px;
-    }
-    #preview-strip {
-      display: none;
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 8px;
-      max-inline-size: 720px;
-      margin: 0 auto 10px;
-    }
-    .preview-thumb {
-      position: relative;
-    }
-    .preview-thumb img {
-      block-size: 60px;
-      inline-size: 60px;
-      object-fit: cover;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      display: block;
-    }
-    .preview-remove {
-      position: absolute;
-      inset-block-start: -6px;
-      inset-inline-end: -6px;
-      inline-size: 18px;
-      block-size: 18px;
-      background: #444;
-      border: none;
-      border-radius: 50%;
-      color: var(--text);
-      font-size: 11px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      line-height: 1;
-    }
-    .preview-remove:hover { background: #666; }
-    .input-inner {
-      max-inline-size: 720px;
-      margin: 0 auto;
-      display: flex;
-      gap: 8px;
-      align-items: flex-end;
-    }
-    button#attach {
-      block-size: 42px;
-      inline-size: 42px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--text-muted);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: border-color 0.2s, color 0.2s;
-    }
-    button#attach:hover { border-color: var(--accent); color: var(--text); }
-    button#attach:disabled { opacity: 0.35; cursor: not-allowed; }
-    textarea {
-      flex: 1;
-      min-block-size: 42px;
-      max-block-size: 160px;
-      padding: 10px 13px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--text);
-      font: inherit;
-      font-size: 0.9rem;
-      line-height: 1.5;
-      resize: none;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    textarea:focus { border-color: var(--accent); }
-    textarea::placeholder { color: var(--text-muted); }
-    textarea:disabled { opacity: 0.5; cursor: not-allowed; }
+			/* ── Messages ── */
+			#messages {
+				flex: 1;
+				position: relative;
+				z-index: 1;
+				overflow-y: auto;
+				padding: 28px 16px 12px;
+				display: flex;
+				flex-direction: column;
+				gap: 18px;
+				scrollbar-width: thin;
+				scrollbar-color: var(--border) transparent;
+			}
 
-    button#send {
-      block-size: 42px;
-      padding: 0 18px;
-      background: var(--accent);
-      border: none;
-      border-radius: 10px;
-      color: #fff;
-      font: inherit;
-      font-size: 0.88rem;
-      font-weight: 500;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: opacity 0.2s;
-      flex-shrink: 0;
-    }
-    button#send:disabled { opacity: 0.35; cursor: not-allowed; }
-    button#send:not(:disabled):hover { opacity: 0.82; }
+			.empty-state {
+				margin: auto;
+				text-align: center;
+				color: var(--text-muted);
+				user-select: none;
+			}
 
-    /* ── Lightbox ── */
-    #lightbox {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.85);
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-      cursor: zoom-out;
-    }
-    #lightbox.open { display: flex; }
-    #lightbox img {
-      max-inline-size: 92vw;
-      max-block-size: 92vh;
-      border-radius: 8px;
-    }
-  </style>
-</head>
-<body>
+			.empty-state h2 {
+				font-family: 'Space Mono', monospace;
+				font-size: 1.3rem;
+				font-weight: 700;
+				letter-spacing: 0.08em;
+				color: var(--cyan);
+				margin-block-end: 12px;
+				text-shadow: 0 0 20px rgba(0, 245, 212, 0.3);
+			}
 
-<header>
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c6af7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="11" width="18" height="10" rx="2"/>
-    <circle cx="12" cy="5" r="2"/>
-    <line x1="12" y1="7" x2="12" y2="11"/>
-    <line x1="8" y1="15" x2="8" y2="17"/>
-    <line x1="16" y1="15" x2="16" y2="17"/>
-  </svg>
-  <h1>InsertaBot</h1>
-  <div class="status">
-    <div class="dot" id="dot"></div>
-    <span id="status-text">Connecting…</span>
-  </div>
-  <button class="btn-ghost" id="new-chat">New chat</button>
-</header>
+			.empty-state p {
+				font-size: 0.88rem;
+				line-height: 1.7;
+				max-inline-size: 320px;
+				color: var(--text-muted);
+			}
 
-<div id="messages">
-  <div class="empty-state" id="empty">
-    <h2>InsertaBot</h2>
-    <p>Ask me anything. I can check the weather, do calculations, schedule tasks, and analyze images.</p>
-  </div>
-</div>
+			.msg-row {
+				display: flex;
+				gap: 10px;
+				max-inline-size: 720px;
+				inline-size: 100%;
+				margin: 0 auto;
+				animation: slide-in 0.18s ease;
+			}
 
-<div id="lightbox"><img id="lightbox-img" src="" alt=""></div>
+			@keyframes slide-in {
+				from {
+					opacity: 0;
+					transform: translateY(6px);
+				}
+				to {
+					opacity: 1;
+					transform: none;
+				}
+			}
 
-<div class="input-wrap">
-  <div id="preview-strip"></div>
-  <div class="input-inner">
-    <button id="attach" title="Attach image" disabled>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-      </svg>
-    </button>
-    <input type="file" id="file-input" accept="image/*" multiple hidden>
-    <textarea id="input" placeholder="Message InsertaBot…" rows="1" disabled></textarea>
-    <button id="send" disabled>Send</button>
-  </div>
-</div>
+			.msg-row.user {
+				flex-direction: row-reverse;
+			}
 
-<script>
-  const msgList      = document.getElementById('messages');
-  const inputEl      = document.getElementById('input');
-  const sendBtn      = document.getElementById('send');
-  const attachBtn    = document.getElementById('attach');
-  const fileInputEl  = document.getElementById('file-input');
-  const previewStrip = document.getElementById('preview-strip');
-  const newChatBtn   = document.getElementById('new-chat');
-  const dot          = document.getElementById('dot');
-  const statusTxt    = document.getElementById('status-text');
-  const lightbox     = document.getElementById('lightbox');
-  const lightboxImg  = document.getElementById('lightbox-img');
+			.avatar {
+				inline-size: 30px;
+				block-size: 30px;
+				border-radius: 50%;
+				flex-shrink: 0;
+				font-family: 'Space Mono', monospace;
+				font-size: 0.65rem;
+				font-weight: 700;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				margin-block-start: 2px;
+			}
 
-  marked.setOptions({ breaks: true, gfm: true });
+			.msg-row.user .avatar {
+				background: var(--accent-dim);
+				border: 1px solid var(--border-cyan);
+				color: var(--cyan);
+			}
 
-  function renderMarkdown(text) {
-    const div = document.createElement('div');
-    div.className = 'bubble-content';
-    div.innerHTML = marked.parse(text);
-    div.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
-    return div;
-  }
+			.msg-row.assistant .avatar {
+				background: var(--surface2);
+				border: 1px solid var(--border);
+				color: var(--text-muted);
+			}
 
-  // ── Per-browser session ──────────────────────────────────────────────────
-  let instanceId = localStorage.getItem('ib_instance');
-  if (!instanceId) {
-    instanceId = crypto.randomUUID();
-    localStorage.setItem('ib_instance', instanceId);
-  }
+			.bubble {
+				padding: 10px 14px;
+				border-radius: 12px;
+				line-height: 1.7;
+				font-size: 0.9rem;
+				max-inline-size: calc(100% - 44px);
+				word-break: break-word;
+			}
 
-  // ── State ────────────────────────────────────────────────────────────────
-  let messages      = [];
-  let pendingImages = [];   // [{ dataUrl, mimeType, filename }]
-  let streaming     = null; // { id, bubbleEl, text }
-  let busy          = false;
-  let ws            = null;
-  let retryDelay    = 1000;
+			.msg-row.user .bubble {
+				background: var(--surface2);
+				border: 1px solid var(--border-cyan);
+				white-space: pre-wrap;
+			}
 
-  // ── UI helpers ───────────────────────────────────────────────────────────
-  function setConnected(yes) {
-    dot.className         = 'dot' + (yes ? ' on' : '');
-    statusTxt.textContent = yes ? 'Connected' : 'Reconnecting…';
-    inputEl.disabled      = !yes || busy;
-    sendBtn.disabled      = !yes || busy;
-    attachBtn.disabled    = !yes || busy;
-  }
+			.msg-row.assistant .bubble {
+				background: var(--surface2);
+				border: 1px solid var(--border);
+			}
 
-  function setBusy(yes) {
-    busy = yes;
-    inputEl.disabled   = yes;
-    sendBtn.disabled   = yes;
-    attachBtn.disabled = yes;
-  }
+			/* Markdown rendered content */
+			.bubble-content p {
+				margin-block-end: 0.6em;
+			}
+			.bubble-content p:last-child {
+				margin-block-end: 0;
+			}
+			.bubble-content ul,
+			.bubble-content ol {
+				padding-inline-start: 1.4em;
+				margin-block-end: 0.6em;
+			}
+			.bubble-content li {
+				margin-block-end: 0.25em;
+			}
+			.bubble-content strong {
+				color: var(--text);
+				font-weight: 700;
+			}
+			.bubble-content em {
+				color: var(--text-muted);
+			}
+			.bubble-content code {
+				font-family: 'Space Mono', monospace;
+				font-size: 0.8em;
+				background: rgba(0, 245, 212, 0.08);
+				border: 1px solid rgba(0, 245, 212, 0.15);
+				border-radius: 4px;
+				padding: 1px 5px;
+				color: var(--cyan);
+			}
+			.bubble-content pre {
+				background: var(--bg);
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				padding: 12px;
+				overflow-x: auto;
+				margin-block: 0.6em;
+			}
+			.bubble-content pre code {
+				background: none;
+				border: none;
+				padding: 0;
+				font-size: 0.82em;
+				color: var(--text);
+			}
+			.bubble-content h1,
+			.bubble-content h2,
+			.bubble-content h3 {
+				font-family: 'Space Mono', monospace;
+				letter-spacing: 0.04em;
+				margin-block: 0.8em 0.4em;
+				color: var(--text);
+			}
+			.bubble-content h1 {
+				font-size: 1.1em;
+			}
+			.bubble-content h2 {
+				font-size: 1em;
+			}
+			.bubble-content h3 {
+				font-size: 0.95em;
+				color: var(--text-muted);
+			}
+			.bubble-content a {
+				color: var(--cyan);
+				text-decoration: none;
+			}
+			.bubble-content a:hover {
+				text-decoration: underline;
+			}
+			.bubble-content blockquote {
+				border-inline-start: 2px solid var(--border-cyan);
+				padding-inline-start: 12px;
+				color: var(--text-muted);
+				margin-block: 0.6em;
+			}
+			.bubble-content hr {
+				border: none;
+				border-block-start: 1px solid var(--border);
+				margin-block: 0.8em;
+			}
+			.bubble-content table {
+				inline-size: 100%;
+				border-collapse: collapse;
+				font-size: 0.85em;
+				margin-block: 0.6em;
+			}
+			.bubble-content th,
+			.bubble-content td {
+				padding: 6px 10px;
+				border: 1px solid var(--border);
+				text-align: start;
+			}
+			.bubble-content th {
+				background: var(--surface);
+				font-family: 'Space Mono', monospace;
+				font-size: 0.78em;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				color: var(--text-muted);
+			}
 
-  function hideEmpty() {
-    const el = document.getElementById('empty');
-    if (el) el.remove();
-  }
+			.msg-img {
+				max-inline-size: 100%;
+				max-block-size: 260px;
+				border-radius: 8px;
+				display: block;
+				margin-block-start: 8px;
+				cursor: pointer;
+				border: 1px solid var(--border);
+			}
 
-  function scrollBottom() {
-    msgList.scrollTop = msgList.scrollHeight;
-  }
+			/* Streaming cursor */
+			.cursor {
+				display: inline-block;
+				inline-size: 2px;
+				block-size: 0.9em;
+				background: var(--cyan);
+				margin-inline-start: 2px;
+				vertical-align: text-bottom;
+				animation: blink 0.9s step-end infinite;
+			}
+			@keyframes blink {
+				50% {
+					opacity: 0;
+				}
+			}
 
-  function esc(s) {
-    return String(s ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
+			/* Tool call pill */
+			.tool-pill {
+				display: inline-flex;
+				align-items: center;
+				gap: 5px;
+				background: rgba(0, 245, 212, 0.07);
+				border: 1px solid rgba(0, 245, 212, 0.2);
+				border-radius: 6px;
+				padding: 3px 9px;
+				font-family: 'Space Mono', monospace;
+				font-size: 0.72rem;
+				color: var(--cyan);
+				margin: 4px 0;
+				opacity: 0.75;
+			}
 
-  function addRow(role, id) {
-    hideEmpty();
-    const avatar = role === 'user' ? 'You' : 'AI';
-    const row = document.createElement('div');
-    row.className = `msg-row ${role}`;
-    row.dataset.id = id;
-    row.innerHTML = `<div class="avatar">${esc(avatar)}</div><div class="bubble"></div>`;
-    msgList.appendChild(row);
-    scrollBottom();
-    return row.querySelector('.bubble');
-  }
+			.tool-pill::before {
+				content: '⚙';
+				font-size: 0.7rem;
+			}
 
-  function extractText(msg) {
-    if (Array.isArray(msg.parts)) {
-      const txt = msg.parts.filter(p => p.type === 'text').map(p => p.text).join('');
-      if (txt) return txt;
-    }
-    if (typeof msg.content === 'string') return msg.content;
-    return '';
-  }
+			/* ── Input area ── */
+			.input-wrap {
+				position: relative;
+				z-index: 1;
+				flex-shrink: 0;
+				background: var(--surface);
+				border-block-start: 1px solid var(--border);
+				padding: 10px 16px 14px;
+			}
 
-  function setBubbleContent(bubbleEl, msg) {
-    bubbleEl.innerHTML = '';
-    const text = extractText(msg);
-    if (text) {
-      if (msg.role === 'assistant') {
-        bubbleEl.appendChild(renderMarkdown(text));
-      } else {
-        const span = document.createElement('span');
-        span.textContent = text;
-        bubbleEl.appendChild(span);
-      }
-    }
-    const fileParts = Array.isArray(msg.parts) ? msg.parts.filter(p => p.type === 'file') : [];
-    for (const fp of fileParts) {
-      const img = document.createElement('img');
-      img.src = fp.url;
-      img.className = 'msg-img';
-      img.alt = fp.filename ?? 'image';
-      img.addEventListener('click', () => openLightbox(fp.url));
-      bubbleEl.appendChild(img);
-    }
-  }
+			#preview-strip {
+				display: none;
+				flex-direction: row;
+				flex-wrap: wrap;
+				gap: 8px;
+				max-inline-size: 720px;
+				margin: 0 auto 10px;
+			}
 
-  // Re-render all persisted messages (used after agent sync)
-  function renderAll() {
-    const wasEmpty = messages.length === 0;
-    msgList.innerHTML = wasEmpty
-      ? '<div class="empty-state" id="empty"><h2>InsertaBot</h2><p>Ask me anything. I can check the weather, do calculations, schedule tasks, and analyze images.</p></div>'
-      : '';
-    for (const m of messages) {
-      const bubble = addRow(m.role, m.id);
-      setBubbleContent(bubble, m);
-    }
-    scrollBottom();
-  }
+			.preview-thumb {
+				position: relative;
+			}
 
-  // ── Lightbox ──────────────────────────────────────────────────────────────
-  function openLightbox(src) {
-    lightboxImg.src = src;
-    lightbox.classList.add('open');
-  }
-  lightbox.addEventListener('click', () => lightbox.classList.remove('open'));
+			.preview-thumb img {
+				block-size: 60px;
+				inline-size: 60px;
+				object-fit: cover;
+				border-radius: 8px;
+				border: 1px solid var(--border-cyan);
+				display: block;
+			}
 
-  // ── Image preview strip ───────────────────────────────────────────────────
-  function updatePreviewStrip() {
-    previewStrip.innerHTML = '';
-    previewStrip.style.display = pendingImages.length ? 'flex' : 'none';
-    pendingImages.forEach((img, i) => {
-      const wrap = document.createElement('div');
-      wrap.className = 'preview-thumb';
-      const imgEl = document.createElement('img');
-      imgEl.src = img.dataUrl;
-      imgEl.alt = img.filename;
-      const rm = document.createElement('button');
-      rm.className = 'preview-remove';
-      rm.textContent = '×';
-      rm.title = 'Remove';
-      rm.addEventListener('click', () => { pendingImages.splice(i, 1); updatePreviewStrip(); });
-      wrap.appendChild(imgEl);
-      wrap.appendChild(rm);
-      previewStrip.appendChild(wrap);
-    });
-  }
+			.preview-remove {
+				position: absolute;
+				inset-block-start: -6px;
+				inset-inline-end: -6px;
+				inline-size: 18px;
+				block-size: 18px;
+				background: var(--surface2);
+				border: 1px solid var(--border);
+				border-radius: 50%;
+				color: var(--text-muted);
+				font-size: 11px;
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 0;
+				line-height: 1;
+				transition:
+					border-color 0.2s,
+					color 0.2s;
+			}
+			.preview-remove:hover {
+				border-color: var(--magenta);
+				color: var(--magenta);
+			}
 
-  function readFile(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve({ dataUrl: reader.result, mimeType: file.type || 'image/jpeg', filename: file.name });
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
+			.input-inner {
+				max-inline-size: 720px;
+				margin: 0 auto;
+				display: flex;
+				gap: 8px;
+				align-items: flex-end;
+			}
 
-  attachBtn.addEventListener('click', () => fileInputEl.click());
+			button#attach {
+				block-size: 42px;
+				inline-size: 42px;
+				background: var(--surface2);
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				color: var(--text-muted);
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				flex-shrink: 0;
+				transition:
+					border-color 0.2s,
+					color 0.2s;
+			}
+			button#attach:hover {
+				border-color: var(--border-cyan);
+				color: var(--cyan);
+			}
+			button#attach:disabled {
+				opacity: 0.35;
+				cursor: not-allowed;
+			}
 
-  fileInputEl.addEventListener('change', async () => {
-    const files = Array.from(fileInputEl.files || []);
-    for (const file of files) {
-      if (pendingImages.length >= 4) break;
-      try { pendingImages.push(await readFile(file)); } catch {}
-    }
-    fileInputEl.value = '';
-    updatePreviewStrip();
-  });
+			textarea {
+				flex: 1;
+				min-block-size: 42px;
+				max-block-size: 160px;
+				padding: 10px 13px;
+				background: var(--surface2);
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				color: var(--text);
+				font-family: 'Syne', sans-serif;
+				font-size: 0.9rem;
+				line-height: 1.5;
+				resize: none;
+				outline: none;
+				transition: border-color 0.2s;
+			}
+			textarea:focus {
+				border-color: var(--border-cyan);
+			}
+			textarea::placeholder {
+				color: var(--text-muted);
+			}
+			textarea:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+			}
 
-  // ── Streaming helpers ────────────────────────────────────────────────────
-  function startStream(msgId) {
-    if (streaming) finalizeStream();
-    const bubble = addRow('assistant', msgId);
-    const cursor = document.createElement('span');
-    cursor.className = 'cursor';
-    bubble.appendChild(cursor);
-    streaming = { id: msgId, bubbleEl: bubble, text: '', cursor };
-  }
+			button#send {
+				block-size: 42px;
+				padding: 0 18px;
+				background: var(--cyan);
+				border: none;
+				border-radius: 10px;
+				color: var(--bg);
+				font-family: 'Space Mono', monospace;
+				font-size: 0.78rem;
+				font-weight: 700;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				cursor: pointer;
+				white-space: nowrap;
+				transition:
+					opacity 0.2s,
+					box-shadow 0.2s;
+				flex-shrink: 0;
+			}
+			button#send:disabled {
+				opacity: 0.35;
+				cursor: not-allowed;
+			}
+			button#send:not(:disabled):hover {
+				opacity: 0.85;
+				box-shadow: 0 0 16px rgba(0, 245, 212, 0.3);
+			}
 
-  function appendChunk(delta) {
-    if (!streaming) return;
-    streaming.text += delta;
-    const { bubbleEl, cursor, text } = streaming;
-    // show plain text while streaming for performance; markdown renders on finalize
-    bubbleEl.textContent = text;
-    bubbleEl.appendChild(cursor);
-    scrollBottom();
-  }
+			/* ── Lightbox ── */
+			#lightbox {
+				display: none;
+				position: fixed;
+				inset: 0;
+				background: rgba(0, 0, 0, 0.88);
+				align-items: center;
+				justify-content: center;
+				z-index: 100;
+				cursor: zoom-out;
+			}
+			#lightbox.open {
+				display: flex;
+			}
+			#lightbox img {
+				max-inline-size: 92vw;
+				max-block-size: 92vh;
+				border-radius: 8px;
+				border: 1px solid var(--border-cyan);
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<svg
+				width="22"
+				height="22"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="var(--cyan)"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			>
+				<rect x="3" y="11" width="18" height="10" rx="2" />
+				<circle cx="12" cy="5" r="2" />
+				<line x1="12" y1="7" x2="12" y2="11" />
+				<line x1="8" y1="15" x2="8" y2="17" />
+				<line x1="16" y1="15" x2="16" y2="17" />
+			</svg>
+			<h1>InsertaBot</h1>
+			<div class="status">
+				<div class="dot" id="dot"></div>
+				<span id="status-text">Connecting…</span>
+			</div>
+			<button class="btn-ghost" id="new-chat">New chat</button>
+		</header>
 
-  function finalizeStream() {
-    if (!streaming) return;
-    const { bubbleEl, cursor, text, id } = streaming;
-    if (bubbleEl.contains(cursor)) bubbleEl.removeChild(cursor);
-    bubbleEl.innerHTML = '';
-    bubbleEl.appendChild(renderMarkdown(text));
-    if (!messages.some(m => m.id === id)) {
-      messages.push({
-        id,
-        role: 'assistant',
-        content: text,
-        parts: [{ type: 'text', text }],
-        createdAt: new Date().toISOString(),
-      });
-    }
-    streaming = null;
-    setBusy(false);
-  }
+		<div id="messages"></div>
 
-  // ── New conversation ──────────────────────────────────────────────────────
-  function newConversation() {
-    if (streaming) finalizeStream();
-    messages = [];
-    pendingImages = [];
-    updatePreviewStrip();
-    instanceId = crypto.randomUUID();
-    localStorage.setItem('ib_instance', instanceId);
-    renderAll();
-    if (ws) ws.close(); // onclose reconnects with new instanceId
-  }
+		<div id="lightbox"><img id="lightbox-img" src="" alt="" /></div>
 
-  newChatBtn.addEventListener('click', newConversation);
+		<div class="input-wrap">
+			<div id="preview-strip"></div>
+			<div class="input-inner">
+				<button id="attach" title="Attach image" disabled>
+					<svg
+						width="18"
+						height="18"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+					</svg>
+				</button>
+				<input type="file" id="file-input" accept="image/*" multiple hidden />
+				<textarea id="input" placeholder="Message InsertaBot…" rows="1" disabled></textarea>
+				<button id="send" disabled>Send</button>
+			</div>
+		</div>
 
-  // ── WebSocket ─────────────────────────────────────────────────────────────
-  function connect() {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${location.host}/agents/chat-agent/${instanceId}`);
+		<script>
+			// ── Config ────────────────────────────────────────────────────────────────
+			const EMPTY_TITLE = 'InsertaBot';
+			const EMPTY_SUBTITLE = 'Your AI web presence assistant. Ask anything, attach images, or let me handle tasks for you.';
 
-    ws.onopen = () => {
-      setConnected(true);
-      retryDelay = 1000;
-    };
+			// ── Inline markdown renderer (no external deps, line-by-line) ──────────────
+			function renderMarkdown(text) {
+				const div = document.createElement('div');
+				div.className = 'bubble-content';
 
-    ws.onclose = () => {
-      setConnected(false);
-      finalizeStream();
-      setBusy(false);
-      ws = null;
-      setTimeout(connect, retryDelay);
-      retryDelay = Math.min(retryDelay * 2, 16000);
-    };
+				function escHtml(s) {
+					return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+				}
 
-    ws.onerror = () => ws.close();
+				function parseInline(s) {
+					return escHtml(s)
+						.replace(/`([^`]+)`/g, '<code>$1</code>')
+						.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+						.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+						.replace(/__(.+?)__/g, '<strong>$1</strong>')
+						.replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+						.replace(/_([^_\n]+)_/g, '<em>$1</em>')
+						.replace(/~~(.+?)~~/g, '<del>$1</del>')
+						.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+				}
 
-    ws.onmessage = (evt) => {
-      let data;
-      try { data = JSON.parse(evt.data); } catch { return; }
-      onAgentMessage(data);
-    };
-  }
+				function flushPara(lines) {
+					if (!lines.length) return;
+					const p = document.createElement('p');
+					p.innerHTML = parseInline(lines.join(' '));
+					div.appendChild(p);
+				}
 
-  function onAgentMessage(data) {
-    switch (data.type) {
+				function flushList(items, ordered) {
+					if (!items.length) return;
+					const list = document.createElement(ordered ? 'ol' : 'ul');
+					for (const item of items) {
+						const li = document.createElement('li');
+						li.innerHTML = parseInline(item);
+						list.appendChild(li);
+					}
+					div.appendChild(list);
+				}
 
-      case 'cf_agent_chat_messages':
-        if (Array.isArray(data.messages) && !streaming) {
-          messages = data.messages;
-          renderAll();
-        }
-        break;
+				const lines = text.split('\n');
+				let i = 0;
+				let paraLines = [];
+				let listItems = [];
+				let listOrdered = false;
 
-      case 'cf_agent_use_chat_response': {
-        const { body, done, id: reqId } = data;
+				function commitPending() {
+					if (listItems.length) {
+						flushList(listItems, listOrdered);
+						listItems = [];
+					}
+					if (paraLines.length) {
+						flushPara(paraLines);
+						paraLines = [];
+					}
+				}
 
-        if (body) {
-          let chunk;
-          try { chunk = JSON.parse(body); } catch { break; }
+				while (i < lines.length) {
+					const line = lines[i];
 
-          switch (chunk.type) {
-            case 'start':
-              startStream(chunk.messageId ?? reqId);
-              break;
-            case 'text-delta':
-              if (!streaming) startStream(reqId);
-              appendChunk(chunk.delta ?? chunk.textDelta ?? '');
-              break;
-            case 'finish':
-              finalizeStream();
-              break;
-            case 'error':
-              if (streaming) {
-                streaming.text += `\n[Error: ${chunk.errorText ?? 'unknown'}]`;
-                finalizeStream();
-              }
-              break;
-          }
-        }
+					// Fenced code block
+					if (line.startsWith('```')) {
+						commitPending();
+						const pre = document.createElement('pre');
+						const code = document.createElement('code');
+						const codeLines = [];
+						i++;
+						while (i < lines.length && !lines[i].startsWith('```')) {
+							codeLines.push(escHtml(lines[i]));
+							i++;
+						}
+						code.innerHTML = codeLines.join('\n');
+						pre.appendChild(code);
+						div.appendChild(pre);
+						i++;
+						continue;
+					}
 
-        if (done) finalizeStream();
-        break;
-      }
+					// Heading
+					const hm = line.match(/^(#{1,3})\s+(.*)/);
+					if (hm) {
+						commitPending();
+						const el = document.createElement(`h${hm[1].length}`);
+						el.innerHTML = parseInline(hm[2]);
+						div.appendChild(el);
+						i++;
+						continue;
+					}
 
-      case 'cf_agent_state':
-        if (data.state?.messages && !streaming) {
-          messages = data.state.messages;
-          renderAll();
-        }
-        break;
-    }
-  }
+					// Horizontal rule
+					if (/^[-*_]{3,}\s*$/.test(line)) {
+						commitPending();
+						div.appendChild(document.createElement('hr'));
+						i++;
+						continue;
+					}
 
-  // ── Sending ───────────────────────────────────────────────────────────────
-  function send() {
-    const text = inputEl.value.trim();
-    if ((!text && !pendingImages.length) || busy || !ws || ws.readyState !== WebSocket.OPEN) return;
+					// Blockquote
+					if (line.startsWith('> ')) {
+						commitPending();
+						const bq = document.createElement('blockquote');
+						const bqLines = [];
+						while (i < lines.length && lines[i].startsWith('> ')) {
+							bqLines.push(lines[i].slice(2));
+							i++;
+						}
+						bq.innerHTML = parseInline(bqLines.join(' '));
+						div.appendChild(bq);
+						continue;
+					}
 
-    const parts = [];
-    if (text) parts.push({ type: 'text', text });
-    for (const img of pendingImages) {
-      parts.push({ type: 'file', mediaType: img.mimeType, url: img.dataUrl, filename: img.filename });
-    }
+					// Blank line — flush current context
+					if (line.trim() === '') {
+						commitPending();
+						i++;
+						continue;
+					}
 
-    const userMsg = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: text || ' ',
-      parts,
-      createdAt: new Date().toISOString(),
-    };
-    messages.push(userMsg);
+					// Unordered list item
+					const ulm = line.match(/^[-*+]\s+(.*)/);
+					if (ulm) {
+						if (paraLines.length) {
+							flushPara(paraLines);
+							paraLines = [];
+						}
+						if (listItems.length && listOrdered) {
+							flushList(listItems, true);
+							listItems = [];
+						}
+						listOrdered = false;
+						listItems.push(ulm[1]);
+						i++;
+						continue;
+					}
 
-    const bubble = addRow('user', userMsg.id);
-    setBubbleContent(bubble, userMsg);
-    scrollBottom();
+					// Ordered list item
+					const olm = line.match(/^\d+\.\s+(.*)/);
+					if (olm) {
+						if (paraLines.length) {
+							flushPara(paraLines);
+							paraLines = [];
+						}
+						if (listItems.length && !listOrdered) {
+							flushList(listItems, false);
+							listItems = [];
+						}
+						listOrdered = true;
+						listItems.push(olm[1]);
+						i++;
+						continue;
+					}
 
-    pendingImages = [];
-    updatePreviewStrip();
-    inputEl.value = '';
-    inputEl.style.height = 'auto';
-    setBusy(true);
+					// Regular text — flush any open list first, then accumulate paragraph
+					if (listItems.length) {
+						flushList(listItems, listOrdered);
+						listItems = [];
+					}
+					paraLines.push(line);
+					i++;
+				}
 
-    ws.send(JSON.stringify({
-      type: 'cf_agent_use_chat_request',
-      id: crypto.randomUUID(),
-      init: {
-        method: 'POST',
-        body: JSON.stringify({ messages, trigger: 'submit-message' }),
-      },
-    }));
-  }
+				commitPending();
+				return div;
+			}
 
-  // ── Input events ──────────────────────────────────────────────────────────
-  inputEl.addEventListener('input', () => {
-    inputEl.style.height = 'auto';
-    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
-  });
+			// ── DOM refs ──────────────────────────────────────────────────────────────
+			const msgList = document.getElementById('messages');
+			const inputEl = document.getElementById('input');
+			const sendBtn = document.getElementById('send');
+			const attachBtn = document.getElementById('attach');
+			const fileInputEl = document.getElementById('file-input');
+			const previewStrip = document.getElementById('preview-strip');
+			const newChatBtn = document.getElementById('new-chat');
+			const dot = document.getElementById('dot');
+			const statusTxt = document.getElementById('status-text');
+			const lightbox = document.getElementById('lightbox');
+			const lightboxImg = document.getElementById('lightbox-img');
 
-  inputEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
-  });
+			// ── Session ───────────────────────────────────────────────────────────────
+			let instanceId = localStorage.getItem('ib_instance');
+			if (!instanceId) {
+				instanceId = crypto.randomUUID();
+				localStorage.setItem('ib_instance', instanceId);
+			}
 
-  sendBtn.addEventListener('click', send);
+			// ── State ─────────────────────────────────────────────────────────────────
+			let messages = [];
+			let pendingImages = [];
+			let streaming = null;
+			let busy = false;
+			let ws = null;
+			let retryDelay = 1000;
 
-  // ── Boot ──────────────────────────────────────────────────────────────────
-  connect();
-</script>
-</body>
+			// ── Empty state ───────────────────────────────────────────────────────────
+			function buildEmptyState() {
+				const div = document.createElement('div');
+				div.className = 'empty-state';
+				div.id = 'empty';
+				div.innerHTML = `<h2>${EMPTY_TITLE}</h2><p>${EMPTY_SUBTITLE}</p>`;
+				return div;
+			}
+
+			function showEmpty() {
+				if (!document.getElementById('empty')) {
+					msgList.appendChild(buildEmptyState());
+				}
+			}
+
+			function hideEmpty() {
+				const el = document.getElementById('empty');
+				if (el) el.remove();
+			}
+
+			// ── UI helpers ────────────────────────────────────────────────────────────
+			function setConnected(yes) {
+				dot.className = 'dot' + (yes ? ' on' : '');
+				statusTxt.textContent = yes ? 'Connected' : 'Reconnecting…';
+				inputEl.disabled = !yes || busy;
+				sendBtn.disabled = !yes || busy;
+				attachBtn.disabled = !yes || busy;
+			}
+
+			function setBusy(yes) {
+				busy = yes;
+				inputEl.disabled = yes;
+				sendBtn.disabled = yes;
+				attachBtn.disabled = yes;
+			}
+
+			function scrollBottom() {
+				msgList.scrollTop = msgList.scrollHeight;
+			}
+
+			function esc(s) {
+				return String(s ?? '')
+					.replace(/&/g, '&amp;')
+					.replace(/</g, '&lt;')
+					.replace(/>/g, '&gt;');
+			}
+
+			function addRow(role, id) {
+				hideEmpty();
+				const row = document.createElement('div');
+				row.className = `msg-row ${role}`;
+				row.dataset.id = id;
+				const avatar = document.createElement('div');
+				avatar.className = 'avatar';
+				avatar.textContent = role === 'user' ? 'You' : 'AI';
+				const bubble = document.createElement('div');
+				bubble.className = 'bubble';
+				row.appendChild(avatar);
+				row.appendChild(bubble);
+				msgList.appendChild(row);
+				scrollBottom();
+				return bubble;
+			}
+
+			function extractText(msg) {
+				if (Array.isArray(msg.parts)) {
+					const txt = msg.parts
+						.filter((p) => p.type === 'text')
+						.map((p) => p.text)
+						.join('');
+					if (txt) return txt;
+				}
+				if (typeof msg.content === 'string') return msg.content;
+				return '';
+			}
+
+			function setBubbleContent(bubbleEl, msg) {
+				bubbleEl.innerHTML = '';
+				const text = extractText(msg);
+				if (text) {
+					if (msg.role === 'assistant') {
+						bubbleEl.appendChild(renderMarkdown(text));
+					} else {
+						const span = document.createElement('span');
+						span.textContent = text;
+						bubbleEl.appendChild(span);
+					}
+				}
+				const fileParts = Array.isArray(msg.parts) ? msg.parts.filter((p) => p.type === 'file') : [];
+				for (const fp of fileParts) {
+					const img = document.createElement('img');
+					img.src = fp.url;
+					img.className = 'msg-img';
+					img.alt = fp.filename ?? 'image';
+					img.addEventListener('click', () => openLightbox(fp.url));
+					bubbleEl.appendChild(img);
+				}
+			}
+
+			// Tool call pill
+			function addToolPill(name) {
+				if (!streaming) return;
+				const pill = document.createElement('div');
+				pill.className = 'tool-pill';
+				pill.textContent = name;
+				streaming.bubbleEl.appendChild(pill);
+				scrollBottom();
+			}
+
+			// Re-render all persisted messages
+			function renderAll() {
+				msgList.innerHTML = '';
+				if (messages.length === 0) {
+					showEmpty();
+					return;
+				}
+				for (const m of messages) {
+					const bubble = addRow(m.role, m.id);
+					setBubbleContent(bubble, m);
+				}
+				scrollBottom();
+			}
+
+			// ── Lightbox ──────────────────────────────────────────────────────────────
+			function openLightbox(src) {
+				lightboxImg.src = src;
+				lightbox.classList.add('open');
+			}
+			lightbox.addEventListener('click', () => lightbox.classList.remove('open'));
+
+			// ── Image preview strip ───────────────────────────────────────────────────
+			function updatePreviewStrip() {
+				previewStrip.innerHTML = '';
+				previewStrip.style.display = pendingImages.length ? 'flex' : 'none';
+				pendingImages.forEach((img, i) => {
+					const wrap = document.createElement('div');
+					wrap.className = 'preview-thumb';
+					const imgEl = document.createElement('img');
+					imgEl.src = img.dataUrl;
+					imgEl.alt = img.filename;
+					const rm = document.createElement('button');
+					rm.className = 'preview-remove';
+					rm.textContent = '×';
+					rm.title = 'Remove';
+					rm.addEventListener('click', () => {
+						pendingImages.splice(i, 1);
+						updatePreviewStrip();
+					});
+					wrap.appendChild(imgEl);
+					wrap.appendChild(rm);
+					previewStrip.appendChild(wrap);
+				});
+			}
+
+			function readFile(file) {
+				return new Promise((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => resolve({ dataUrl: reader.result, mimeType: file.type || 'image/jpeg', filename: file.name });
+					reader.onerror = reject;
+					reader.readAsDataURL(file);
+				});
+			}
+
+			attachBtn.addEventListener('click', () => fileInputEl.click());
+
+			fileInputEl.addEventListener('change', async () => {
+				const files = Array.from(fileInputEl.files || []);
+				for (const file of files) {
+					if (pendingImages.length >= 4) break;
+					try {
+						pendingImages.push(await readFile(file));
+					} catch {}
+				}
+				fileInputEl.value = '';
+				updatePreviewStrip();
+			});
+
+			// ── Streaming helpers ─────────────────────────────────────────────────────
+			function startStream(msgId) {
+				if (streaming) finalizeStream();
+				const bubble = addRow('assistant', msgId);
+				const cursor = document.createElement('span');
+				cursor.className = 'cursor';
+				bubble.appendChild(cursor);
+				streaming = { id: msgId, bubbleEl: bubble, text: '', cursor };
+			}
+
+			function appendChunk(delta) {
+				if (!streaming) return;
+				streaming.text += delta;
+				const { bubbleEl, cursor, text } = streaming;
+				// Render markdown live during streaming
+				bubbleEl.innerHTML = '';
+				const content = renderMarkdown(text);
+				bubbleEl.appendChild(content);
+				bubbleEl.appendChild(cursor);
+				scrollBottom();
+			}
+
+			function finalizeStream() {
+				if (!streaming) return;
+				const { bubbleEl, cursor, text, id } = streaming;
+				if (bubbleEl.contains(cursor)) bubbleEl.removeChild(cursor);
+				// Final clean render
+				bubbleEl.innerHTML = '';
+				bubbleEl.appendChild(renderMarkdown(text));
+				if (!messages.some((m) => m.id === id)) {
+					messages.push({
+						id,
+						role: 'assistant',
+						content: text,
+						parts: [{ type: 'text', text }],
+						createdAt: new Date().toISOString(),
+					});
+				}
+				streaming = null;
+				setBusy(false);
+			}
+
+			// ── New conversation ──────────────────────────────────────────────────────
+			function newConversation() {
+				if (streaming) finalizeStream();
+				messages = [];
+				pendingImages = [];
+				updatePreviewStrip();
+				instanceId = crypto.randomUUID();
+				localStorage.setItem('ib_instance', instanceId);
+				renderAll();
+				if (ws) ws.close();
+			}
+
+			newChatBtn.addEventListener('click', newConversation);
+
+			// ── WebSocket ─────────────────────────────────────────────────────────────
+			function connect() {
+				const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+				ws = new WebSocket(`${proto}//${location.host}/agents/chat-agent/${instanceId}`);
+
+				ws.onopen = () => {
+					setConnected(true);
+					retryDelay = 1000;
+				};
+
+				ws.onclose = () => {
+					setConnected(false);
+					finalizeStream();
+					setBusy(false);
+					ws = null;
+					setTimeout(connect, retryDelay);
+					retryDelay = Math.min(retryDelay * 2, 16000);
+				};
+
+				ws.onerror = () => ws.close();
+
+				ws.onmessage = (evt) => {
+					let data;
+					try {
+						data = JSON.parse(evt.data);
+					} catch {
+						return;
+					}
+					onAgentMessage(data);
+				};
+			}
+
+			function onAgentMessage(data) {
+				switch (data.type) {
+					case 'cf_agent_chat_messages':
+						if (Array.isArray(data.messages) && !streaming) {
+							messages = data.messages;
+							renderAll();
+						}
+						break;
+
+					case 'cf_agent_use_chat_response': {
+						const { body, done, id: reqId } = data;
+
+						if (body) {
+							let chunk;
+							try {
+								chunk = JSON.parse(body);
+							} catch {
+								break;
+							}
+
+							switch (chunk.type) {
+								case 'start':
+									startStream(chunk.messageId ?? reqId);
+									break;
+								case 'text-delta':
+									if (!streaming) startStream(reqId);
+									appendChunk(chunk.delta ?? chunk.textDelta ?? '');
+									break;
+								case 'tool-call':
+									addToolPill(chunk.toolName ?? chunk.name ?? 'tool');
+									break;
+								case 'finish':
+									finalizeStream();
+									break;
+								case 'error':
+									if (streaming) {
+										streaming.text += `\n\n*[Error: ${chunk.errorText ?? 'unknown'}]*`;
+										finalizeStream();
+									}
+									break;
+							}
+						}
+
+						if (done) finalizeStream();
+						break;
+					}
+
+					case 'cf_agent_state':
+						if (data.state?.messages && !streaming) {
+							messages = data.state.messages;
+							renderAll();
+						}
+						break;
+				}
+			}
+
+			// ── Sending ───────────────────────────────────────────────────────────────
+			function send() {
+				const text = inputEl.value.trim();
+				if ((!text && !pendingImages.length) || busy || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+				const parts = [];
+				if (text) parts.push({ type: 'text', text });
+				for (const img of pendingImages) {
+					parts.push({ type: 'file', mediaType: img.mimeType, url: img.dataUrl, filename: img.filename });
+				}
+
+				const userMsg = {
+					id: crypto.randomUUID(),
+					role: 'user',
+					content: text || ' ',
+					parts,
+					createdAt: new Date().toISOString(),
+				};
+				messages.push(userMsg);
+
+				const bubble = addRow('user', userMsg.id);
+				setBubbleContent(bubble, userMsg);
+				scrollBottom();
+
+				pendingImages = [];
+				updatePreviewStrip();
+				inputEl.value = '';
+				inputEl.style.height = 'auto';
+				setBusy(true);
+
+				ws.send(
+					JSON.stringify({
+						type: 'cf_agent_use_chat_request',
+						id: crypto.randomUUID(),
+						init: {
+							method: 'POST',
+							body: JSON.stringify({ messages, trigger: 'submit-message' }),
+						},
+					}),
+				);
+			}
+
+			// ── Input events ──────────────────────────────────────────────────────────
+			inputEl.addEventListener('input', () => {
+				inputEl.style.height = 'auto';
+				inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+			});
+
+			inputEl.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter' && !e.shiftKey) {
+					e.preventDefault();
+					send();
+				}
+			});
+
+			sendBtn.addEventListener('click', send);
+
+			// ── Boot ──────────────────────────────────────────────────────────────────
+			showEmpty();
+			connect();
+		</script>
+	</body>
 </html>
