@@ -1,9 +1,10 @@
-<!-- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InsertaBot</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js" crossorigin="anonymous"></script>
   <style>
     :root {
       --bg: #0a0a0a;
@@ -125,17 +126,71 @@
       line-height: 1.65;
       font-size: 0.9rem;
       max-inline-size: calc(100% - 44px);
-      white-space: pre-wrap;
       word-break: break-word;
     }
     .msg-row.user .bubble {
       background: var(--surface2);
       border: 1px solid var(--accent-border);
+      white-space: pre-wrap;
     }
     .msg-row.assistant .bubble {
       background: var(--surface2);
       border: 1px solid var(--border);
     }
+
+    /* markdown content inside assistant bubbles */
+    .bubble-content p { margin-block-end: 0.6em; }
+    .bubble-content p:last-child { margin-block-end: 0; }
+    .bubble-content ul, .bubble-content ol { padding-inline-start: 1.4em; margin-block-end: 0.6em; }
+    .bubble-content li { margin-block-end: 0.2em; }
+    .bubble-content h1, .bubble-content h2, .bubble-content h3,
+    .bubble-content h4, .bubble-content h5, .bubble-content h6 {
+      font-weight: 600; margin-block: 0.8em 0.3em;
+    }
+    .bubble-content h1 { font-size: 1.1em; }
+    .bubble-content h2 { font-size: 1.05em; }
+    .bubble-content h3, .bubble-content h4 { font-size: 1em; }
+    .bubble-content code {
+      background: rgba(255,255,255,0.07);
+      border-radius: 4px;
+      padding: 0.1em 0.35em;
+      font-family: 'Space Mono', 'Fira Code', monospace;
+      font-size: 0.84em;
+    }
+    .bubble-content pre {
+      background: rgba(0,0,0,0.35);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 13px;
+      overflow-x: auto;
+      margin-block-end: 0.6em;
+    }
+    .bubble-content pre code {
+      background: none;
+      padding: 0;
+      font-size: 0.85em;
+    }
+    .bubble-content blockquote {
+      border-inline-start: 3px solid var(--accent);
+      margin-inline-start: 0;
+      padding-inline-start: 0.8em;
+      color: var(--text-muted);
+      margin-block-end: 0.6em;
+    }
+    .bubble-content table {
+      border-collapse: collapse;
+      margin-block-end: 0.6em;
+      inline-size: 100%;
+    }
+    .bubble-content th, .bubble-content td {
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      text-align: start;
+    }
+    .bubble-content th { background: rgba(255,255,255,0.05); }
+    .bubble-content a { color: var(--accent); }
+    .bubble-content hr { border: none; border-block-start: 1px solid var(--border); margin-block: 0.6em; }
+
     .msg-img {
       max-inline-size: 100%;
       max-block-size: 260px;
@@ -349,6 +404,16 @@
   const lightbox     = document.getElementById('lightbox');
   const lightboxImg  = document.getElementById('lightbox-img');
 
+  marked.setOptions({ breaks: true, gfm: true });
+
+  function renderMarkdown(text) {
+    const div = document.createElement('div');
+    div.className = 'bubble-content';
+    div.innerHTML = marked.parse(text);
+    div.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
+    return div;
+  }
+
   // ── Per-browser session ──────────────────────────────────────────────────
   let instanceId = localStorage.getItem('ib_instance');
   if (!instanceId) {
@@ -421,9 +486,13 @@
     bubbleEl.innerHTML = '';
     const text = extractText(msg);
     if (text) {
-      const span = document.createElement('span');
-      span.textContent = text;
-      bubbleEl.appendChild(span);
+      if (msg.role === 'assistant') {
+        bubbleEl.appendChild(renderMarkdown(text));
+      } else {
+        const span = document.createElement('span');
+        span.textContent = text;
+        bubbleEl.appendChild(span);
+      }
     }
     const fileParts = Array.isArray(msg.parts) ? msg.parts.filter(p => p.type === 'file') : [];
     for (const fp of fileParts) {
@@ -512,6 +581,7 @@
     if (!streaming) return;
     streaming.text += delta;
     const { bubbleEl, cursor, text } = streaming;
+    // show plain text while streaming for performance; markdown renders on finalize
     bubbleEl.textContent = text;
     bubbleEl.appendChild(cursor);
     scrollBottom();
@@ -521,7 +591,8 @@
     if (!streaming) return;
     const { bubbleEl, cursor, text, id } = streaming;
     if (bubbleEl.contains(cursor)) bubbleEl.removeChild(cursor);
-    bubbleEl.textContent = text;
+    bubbleEl.innerHTML = '';
+    bubbleEl.appendChild(renderMarkdown(text));
     if (!messages.some(m => m.id === id)) {
       messages.push({
         id,
@@ -687,4 +758,3 @@
 </script>
 </body>
 </html>
- -->
