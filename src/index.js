@@ -41995,13 +41995,17 @@ var ChatAgent = class extends AIChatAgent {
 	}
 	async onChatMessage(_onFinish, options) {
 		const mcpTools = this.mcp.getAITools();
+		const mcpToolNames = Object.keys(mcpTools);
+		const mcpSection = mcpToolNames.length > 0
+			? `\n\nYou have the following external tools available via connected add-ons: ${mcpToolNames.join(", ")}.\nUse them proactively and chain as many calls as needed to fully complete the user's request — do not stop halfway. For GitHub tasks: create branches, commit file changes, open pull requests, and verify results all in one go unless the user says otherwise. Always carry a task through to completion before reporting back.`
+			: "";
 		return streamText({
 			model: createWorkersAI({ binding: this.env.AI })("@cf/moonshotai/kimi-k2.5", { sessionAffinity: this.sessionAffinity }),
 			system: `You are InsertaBot, a helpful AI assistant. You are NOT Claude and were NOT created by Anthropic. You are powered by Kimi K2.5. You can check the weather, get the user's timezone, run calculations, schedule tasks, and understand images. When users share images, describe what you see and answer questions about them.
 
 ${getSchedulePrompt({ date: /* @__PURE__ */ new Date() })}
 
-If the user asks to schedule a task, use the schedule tool to schedule the task.`,
+If the user asks to schedule a task, use the schedule tool to schedule the task.${mcpSection}`,
 			messages: pruneMessages({
 				messages: inlineDataUrls(await convertToModelMessages(this.messages)),
 				toolCalls: "before-last-2-messages"
@@ -42095,7 +42099,7 @@ If the user asks to schedule a task, use the schedule tool to schedule the task.
 					}
 				})
 			},
-			stopWhen: stepCountIs(5),
+			stopWhen: stepCountIs(25),
 			abortSignal: options?.abortSignal
 		}).toUIMessageStreamResponse();
 	}
