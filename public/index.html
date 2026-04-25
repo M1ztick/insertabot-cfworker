@@ -856,6 +856,10 @@
 							<label for="addons-url">Server URL</label>
 							<input id="addons-url" type="url" placeholder="https://…" autocomplete="off" />
 						</div>
+						<div class="addons-field">
+							<label for="addons-token">Access token <span style="opacity:.5;font-weight:400">(optional)</span></label>
+							<input id="addons-token" type="password" placeholder="e.g. ghp_…" autocomplete="off" />
+						</div>
 						<div class="addons-form-error" id="addons-form-error"></div>
 						<button class="addons-connect-btn" id="addons-connect-btn">Connect</button>
 					</div>
@@ -1349,6 +1353,7 @@
 			async function connectServer() {
 				const nameInput = document.getElementById('addons-name');
 				const urlInput = document.getElementById('addons-url');
+				const tokenInput = document.getElementById('addons-token');
 				const errorEl = document.getElementById('addons-form-error');
 				const connectBtn = document.getElementById('addons-connect-btn');
 
@@ -1365,13 +1370,15 @@
 					return;
 				}
 				const nameVal = nameInput.value.trim() || parsedUrl.hostname;
+				const tokenVal = tokenInput.value.trim() || undefined;
 				errorEl.textContent = '';
 				connectBtn.disabled = true;
 				connectBtn.textContent = 'Connecting…';
 				try {
-					await callRpc('addServer', [nameVal, urlVal]);
+					await callRpc('addServer', [nameVal, urlVal, tokenVal]);
 					nameInput.value = '';
 					urlInput.value = '';
+					tokenInput.value = '';
 				} catch (e) {
 					errorEl.textContent = e.message ?? 'Connection failed.';
 				} finally {

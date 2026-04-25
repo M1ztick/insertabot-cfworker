@@ -41986,8 +41986,9 @@ var ChatAgent = class extends AIChatAgent {
 			});
 		} });
 	}
-	async addServer(name, url) {
-		return await this.addMcpServer(name, url);
+	async addServer(name, url, token) {
+		const opts = token ? { transport: { headers: { Authorization: `Bearer ${token}` } } } : undefined;
+		return await this.addMcpServer(name, url, opts);
 	}
 	async removeServer(serverId) {
 		await this.removeMcpServer(serverId);
