@@ -534,6 +534,248 @@
 				box-shadow: 0 0 16px rgba(0, 245, 212, 0.3);
 			}
 
+			/* ── Add-ons panel ── */
+			.addons-backdrop {
+				display: none;
+				position: fixed;
+				inset: 0;
+				background: rgba(0, 0, 0, 0.55);
+				z-index: 50;
+			}
+			.addons-backdrop.open { display: block; }
+
+			.addons-panel {
+				position: fixed;
+				inset-block: 0;
+				inset-inline-end: 0;
+				inline-size: 320px;
+				max-inline-size: 100vw;
+				background: var(--surface);
+				border-inline-start: 1px solid var(--border);
+				z-index: 51;
+				display: flex;
+				flex-direction: column;
+				transform: translateX(100%);
+				transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+			}
+			.addons-panel.open { transform: translateX(0); }
+
+			.addons-header {
+				display: flex;
+				align-items: center;
+				padding: 14px 18px;
+				border-block-end: 1px solid var(--border);
+				flex-shrink: 0;
+				gap: 8px;
+			}
+			.addons-title {
+				font-family: 'Space Mono', monospace;
+				font-size: 0.78rem;
+				font-weight: 700;
+				letter-spacing: 0.1em;
+				text-transform: uppercase;
+				color: var(--text);
+				flex: 1;
+			}
+			.addons-close {
+				background: none;
+				border: none;
+				color: var(--text-muted);
+				font-size: 1.1rem;
+				cursor: pointer;
+				padding: 3px 6px;
+				line-height: 1;
+				border-radius: 6px;
+				transition: color 0.2s;
+			}
+			.addons-close:hover { color: var(--text); }
+
+			.addons-body {
+				flex: 1;
+				overflow-y: auto;
+				padding: 18px;
+				display: flex;
+				flex-direction: column;
+				gap: 22px;
+				scrollbar-width: thin;
+				scrollbar-color: var(--border) transparent;
+			}
+
+			.addons-section-title {
+				font-family: 'Space Mono', monospace;
+				font-size: 0.66rem;
+				font-weight: 700;
+				letter-spacing: 0.1em;
+				text-transform: uppercase;
+				color: var(--text-muted);
+				margin-block-end: 10px;
+			}
+
+			.addons-empty {
+				color: var(--text-muted);
+				font-size: 0.82rem;
+				text-align: center;
+				padding: 12px 0;
+				line-height: 1.6;
+			}
+
+			.server-card {
+				background: var(--surface2);
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				padding: 12px 14px;
+				margin-block-end: 8px;
+			}
+			.server-card:last-child { margin-block-end: 0; }
+
+			.server-card-top {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				margin-block-end: 8px;
+			}
+
+			.server-status-dot {
+				inline-size: 8px;
+				block-size: 8px;
+				border-radius: 50%;
+				flex-shrink: 0;
+			}
+			.server-status-dot.ready {
+				background: var(--cyan);
+				box-shadow: 0 0 6px rgba(0, 245, 212, 0.4);
+			}
+			.server-status-dot.connecting {
+				background: #f5b800;
+				animation: pulse-dot 1s step-end infinite;
+			}
+			.server-status-dot.failed { background: var(--magenta); }
+			.server-status-dot.authenticating { background: #f57800; }
+			.server-status-dot.other { background: #555; }
+			@keyframes pulse-dot { 50% { opacity: 0.35; } }
+
+			.server-name {
+				font-family: 'Space Mono', monospace;
+				font-size: 0.78rem;
+				font-weight: 700;
+				color: var(--text);
+				flex: 1;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.server-disconnect {
+				background: none;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				color: var(--text-muted);
+				font-family: 'Space Mono', monospace;
+				font-size: 0.62rem;
+				padding: 3px 9px;
+				cursor: pointer;
+				transition:
+					border-color 0.2s,
+					color 0.2s;
+				white-space: nowrap;
+				flex-shrink: 0;
+			}
+			.server-disconnect:hover:not(:disabled) {
+				border-color: var(--border-magenta);
+				color: var(--magenta);
+			}
+			.server-disconnect:disabled { opacity: 0.4; cursor: not-allowed; }
+
+			.server-error {
+				font-size: 0.74rem;
+				color: var(--magenta);
+				margin-block-end: 6px;
+				line-height: 1.4;
+			}
+
+			.addons-auth-link {
+				display: inline-block;
+				font-family: 'Space Mono', monospace;
+				font-size: 0.7rem;
+				color: #f57800;
+				text-decoration: none;
+				margin-block-end: 6px;
+			}
+			.addons-auth-link:hover { text-decoration: underline; }
+
+			.server-tools {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 5px;
+			}
+			.tool-chip {
+				font-family: 'Space Mono', monospace;
+				font-size: 0.62rem;
+				background: rgba(0, 245, 212, 0.06);
+				border: 1px solid rgba(0, 245, 212, 0.14);
+				border-radius: 5px;
+				padding: 2px 7px;
+				color: var(--text-muted);
+				cursor: default;
+			}
+
+			/* Connect form */
+			.addons-form {
+				display: flex;
+				flex-direction: column;
+				gap: 12px;
+			}
+			.addons-field label {
+				font-family: 'Space Mono', monospace;
+				font-size: 0.64rem;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				color: var(--text-muted);
+				display: block;
+				margin-block-end: 5px;
+			}
+			.addons-field input {
+				inline-size: 100%;
+				padding: 9px 12px;
+				background: var(--surface2);
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				color: var(--text);
+				font-family: 'Syne', sans-serif;
+				font-size: 0.85rem;
+				outline: none;
+				transition: border-color 0.2s;
+			}
+			.addons-field input:focus { border-color: var(--border-cyan); }
+			.addons-field input::placeholder { color: var(--text-muted); }
+
+			.addons-form-error {
+				font-size: 0.74rem;
+				color: var(--magenta);
+				line-height: 1.4;
+				min-block-size: 1em;
+			}
+
+			.addons-connect-btn {
+				inline-size: 100%;
+				padding: 10px;
+				background: var(--surface2);
+				border: 1px solid var(--border-cyan);
+				border-radius: 8px;
+				color: var(--cyan);
+				font-family: 'Space Mono', monospace;
+				font-size: 0.72rem;
+				font-weight: 700;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				cursor: pointer;
+				transition:
+					background 0.2s,
+					opacity 0.2s;
+			}
+			.addons-connect-btn:hover:not(:disabled) { background: rgba(0, 245, 212, 0.1); }
+			.addons-connect-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
 			/* ── Lightbox ── */
 			#lightbox {
 				display: none;
@@ -579,8 +821,47 @@
 				<div class="dot" id="dot"></div>
 				<span id="status-text">Connecting…</span>
 			</div>
+			<button class="btn-ghost" id="addons-btn" title="Add-ons &amp; integrations">
+				<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;margin-inline-end:5px">
+					<path d="M12 22v-5"/>
+					<path d="M9 8V2"/>
+					<path d="M15 8V2"/>
+					<path d="M18 8H6a2 2 0 0 0-2 2v3a7 7 0 0 0 14 0v-3a2 2 0 0 0-2-2z"/>
+				</svg>Add-ons
+			</button>
 			<button class="btn-ghost" id="new-chat">New chat</button>
 		</header>
+
+		<div class="addons-backdrop" id="addons-backdrop"></div>
+		<aside class="addons-panel" id="addons-panel" aria-label="Add-ons">
+			<div class="addons-header">
+				<span class="addons-title">Add-ons</span>
+				<button class="addons-close" id="addons-close" aria-label="Close">✕</button>
+			</div>
+			<div class="addons-body">
+				<section>
+					<p class="addons-section-title">Connected</p>
+					<div id="addons-servers">
+						<p class="addons-empty">No servers connected yet.</p>
+					</div>
+				</section>
+				<section>
+					<p class="addons-section-title">Connect a server</p>
+					<div class="addons-form">
+						<div class="addons-field">
+							<label for="addons-name">Name <span style="opacity:.5;font-weight:400">(optional)</span></label>
+							<input id="addons-name" type="text" placeholder="e.g. My GitHub Tools" autocomplete="off" />
+						</div>
+						<div class="addons-field">
+							<label for="addons-url">Server URL</label>
+							<input id="addons-url" type="url" placeholder="https://…" autocomplete="off" />
+						</div>
+						<div class="addons-form-error" id="addons-form-error"></div>
+						<button class="addons-connect-btn" id="addons-connect-btn">Connect</button>
+					</div>
+				</section>
+			</div>
+		</aside>
 
 		<div id="messages"></div>
 
@@ -806,6 +1087,10 @@
 			let ws = null;
 			let retryDelay = 1000;
 
+			// ── Add-ons state ─────────────────────────────────────────────────────────
+			let addonsOpen = false;
+			const pendingRpc = new Map();
+
 			// ── Empty state ───────────────────────────────────────────────────────────
 			function buildEmptyState() {
 				const div = document.createElement('div');
@@ -935,6 +1220,173 @@
 				lightbox.classList.add('open');
 			}
 			lightbox.addEventListener('click', () => lightbox.classList.remove('open'));
+
+			// ── Add-ons panel ─────────────────────────────────────────────────────────
+			function toggleAddons() {
+				addonsOpen = !addonsOpen;
+				document.getElementById('addons-backdrop').classList.toggle('open', addonsOpen);
+				document.getElementById('addons-panel').classList.toggle('open', addonsOpen);
+			}
+
+			function callRpc(method, args) {
+				return new Promise((resolve, reject) => {
+					if (!ws || ws.readyState !== WebSocket.OPEN) {
+						reject(new Error('Not connected'));
+						return;
+					}
+					const id = crypto.randomUUID();
+					pendingRpc.set(id, { resolve, reject });
+					ws.send(JSON.stringify({ type: 'rpc', id, method, args }));
+					setTimeout(() => {
+						if (pendingRpc.has(id)) {
+							pendingRpc.delete(id);
+							reject(new Error('Request timed out'));
+						}
+					}, 15000);
+				});
+			}
+
+			function dotClass(state) {
+				if (state === 'ready') return 'ready';
+				if (state === 'connecting') return 'connecting';
+				if (state === 'failed') return 'failed';
+				if (state === 'authenticating') return 'authenticating';
+				return 'other';
+			}
+
+			function renderAddons(mcp) {
+				if (!mcp) return;
+				const serversEl = document.getElementById('addons-servers');
+				const servers = mcp.servers ?? {};
+				const tools = Array.isArray(mcp.tools) ? mcp.tools : [];
+				const entries = Object.entries(servers);
+
+				serversEl.innerHTML = '';
+				if (entries.length === 0) {
+					const empty = document.createElement('p');
+					empty.className = 'addons-empty';
+					empty.textContent = 'No servers connected yet.';
+					serversEl.appendChild(empty);
+					return;
+				}
+
+				for (const [id, srv] of entries) {
+					const serverTools = tools.filter((t) => t.serverId === id);
+					const card = document.createElement('div');
+					card.className = 'server-card';
+
+					const top = document.createElement('div');
+					top.className = 'server-card-top';
+
+					const dot = document.createElement('span');
+					dot.className = `server-status-dot ${dotClass(srv.state)}`;
+					dot.title = srv.state ?? '';
+
+					const nameEl = document.createElement('span');
+					nameEl.className = 'server-name';
+					nameEl.title = srv.server_url ?? '';
+					nameEl.textContent = srv.name ?? id;
+
+					const disconnectBtn = document.createElement('button');
+					disconnectBtn.className = 'server-disconnect';
+					disconnectBtn.textContent = 'Remove';
+					disconnectBtn.addEventListener('click', async () => {
+						disconnectBtn.disabled = true;
+						disconnectBtn.textContent = '…';
+						try { await callRpc('removeServer', [id]); } catch {}
+						disconnectBtn.disabled = false;
+						disconnectBtn.textContent = 'Remove';
+					});
+
+					top.appendChild(dot);
+					top.appendChild(nameEl);
+					top.appendChild(disconnectBtn);
+					card.appendChild(top);
+
+					if (srv.error) {
+						const errEl = document.createElement('div');
+						errEl.className = 'server-error';
+						errEl.textContent = srv.error;
+						card.appendChild(errEl);
+					}
+
+					if (srv.state === 'authenticating' && srv.auth_url) {
+						const authLink = document.createElement('a');
+						authLink.href = srv.auth_url;
+						authLink.target = '_blank';
+						authLink.rel = 'noopener noreferrer';
+						authLink.className = 'addons-auth-link';
+						authLink.textContent = 'Authorize to continue →';
+						card.appendChild(authLink);
+					}
+
+					if (serverTools.length > 0) {
+						const toolsEl = document.createElement('div');
+						toolsEl.className = 'server-tools';
+						for (const t of serverTools) {
+							const chip = document.createElement('span');
+							chip.className = 'tool-chip';
+							chip.title = t.description ?? '';
+							chip.textContent = t.name;
+							toolsEl.appendChild(chip);
+						}
+						card.appendChild(toolsEl);
+					} else if (srv.state === 'ready') {
+						const toolsEl = document.createElement('div');
+						toolsEl.className = 'server-tools';
+						const chip = document.createElement('span');
+						chip.className = 'tool-chip';
+						chip.style.opacity = '0.4';
+						chip.textContent = 'No tools exposed';
+						toolsEl.appendChild(chip);
+						card.appendChild(toolsEl);
+					}
+
+					serversEl.appendChild(card);
+				}
+			}
+
+			async function connectServer() {
+				const nameInput = document.getElementById('addons-name');
+				const urlInput = document.getElementById('addons-url');
+				const errorEl = document.getElementById('addons-form-error');
+				const connectBtn = document.getElementById('addons-connect-btn');
+
+				const urlVal = urlInput.value.trim();
+				if (!urlVal) {
+					errorEl.textContent = 'Please enter a server URL.';
+					return;
+				}
+				let parsedUrl;
+				try {
+					parsedUrl = new URL(urlVal);
+				} catch {
+					errorEl.textContent = "That doesn't look like a valid URL.";
+					return;
+				}
+				const nameVal = nameInput.value.trim() || parsedUrl.hostname;
+				errorEl.textContent = '';
+				connectBtn.disabled = true;
+				connectBtn.textContent = 'Connecting…';
+				try {
+					await callRpc('addServer', [nameVal, urlVal]);
+					nameInput.value = '';
+					urlInput.value = '';
+				} catch (e) {
+					errorEl.textContent = e.message ?? 'Connection failed.';
+				} finally {
+					connectBtn.disabled = false;
+					connectBtn.textContent = 'Connect';
+				}
+			}
+
+			document.getElementById('addons-btn').addEventListener('click', toggleAddons);
+			document.getElementById('addons-close').addEventListener('click', toggleAddons);
+			document.getElementById('addons-backdrop').addEventListener('click', toggleAddons);
+			document.getElementById('addons-connect-btn').addEventListener('click', connectServer);
+			document.getElementById('addons-url').addEventListener('keydown', (e) => {
+				if (e.key === 'Enter') connectServer();
+			});
 
 			// ── Image preview strip ───────────────────────────────────────────────────
 			function updatePreviewStrip() {
@@ -1073,6 +1525,20 @@
 
 			function onAgentMessage(data) {
 				switch (data.type) {
+					case 'rpc': {
+						const p = pendingRpc.get(data.id);
+						if (p) {
+							pendingRpc.delete(data.id);
+							if (data.success) p.resolve(data.result);
+							else p.reject(new Error(data.error ?? 'RPC error'));
+						}
+						break;
+					}
+
+					case 'cf_agent_mcp_servers':
+						renderAddons(data.mcp);
+						break;
+
 					case 'cf_agent_chat_messages':
 						if (Array.isArray(data.messages) && !streaming) {
 							messages = data.messages;
