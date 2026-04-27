@@ -27,6 +27,17 @@
   "ai": {
     "binding": "AI"
   },
+  // KV namespace for API key → plan lookups
+  // Create with: npx wrangler kv namespace create IB_PLANS
+  // Then replace the id below with the real namespace ID
+  "kv_namespaces": [
+    {
+      "binding": "IB_PLANS",
+      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+    }
+  ],
+  // Secrets (set via: npx wrangler secret put TAVILY_API_KEY)
+  // TAVILY_API_KEY — Tavily Search API key for real-time web search (all tiers)
   "migrations": [
     {
       "tag": "v1",

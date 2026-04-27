@@ -41934,11 +41934,185 @@ function _checkInRHS(e) {
 	return e;
 }
 /**
-* The AI SDK's downloadAssets step runs `new URL(data)` on every file
-* part's string data. Data URIs parse as valid URLs, so it tries to
-* HTTP-fetch them and fails. Decode to Uint8Array so the SDK treats
-* them as inline data instead.
-*/
+ * ─────────────────────────────────────────────────────────────────────────────
+ * INSERTABOT TIER SYSTEM
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Plans
+ *   light  — Free. Llama 3.3 70B. 20 conv/day. Web search (5 results).
+ *            No images. No MCP. WordPress + platform.
+ *   plus   — $9.99/mo. Kimi K2.5. 500 conv/day. Web search (10 results).
+ *            Images. No MCP. WordPress + platform.
+ *   agent  — $29.99/mo. Kimi K2.6. Unlimited. Web search (20 results).
+ *            Images. MCP. Scheduled tasks. Platform only.
+ *   demo   — No API key present. Agent-level quality, 30 msg/session soft cap.
+ *            Used by cfworker.insertabot.io as the public showroom.
+ *
+ * Auth flow
+ *   Every request may carry an X-IB-API-Key header (set by the WP plugin or
+ *   the insertabot.io platform). The worker looks it up in the IB_PLANS KV
+ *   namespace. If absent → demo mode.
+ *
+ * KV key format:  <apiKey>  →  JSON: { plan, email, dailyLimit, source }
+ *   e.g. { "plan": "plus", "email": "user@example.com",
+ *           "dailyLimit": 500, "source": "wordpress" }
+ *
+ * Daily conversation counts are stored in the Durable Object's own storage.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+// ── Plan config ───────────────────────────────────────────────────────────────
+
+const PLAN_CONFIG = {
+	demo: {
+		model:         "@cf/moonshotai/kimi-k2.6",
+		dailyLimit:    null,
+		sessionMsgCap: 30,
+		searchResults: 20,
+		searchDepth:   "advanced",
+		images:        true,
+		mcp:           true,
+		scheduling:    true,
+		label:         "Demo",
+		modelLabel:    "Kimi K2.6",
+	},
+	light: {
+		model:         "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+		dailyLimit:    20,
+		sessionMsgCap: null,
+		searchResults: 5,
+		searchDepth:   "basic",
+		images:        false,
+		mcp:           false,
+		scheduling:    false,
+		label:         "Light",
+		modelLabel:    "Llama 3.3 70B",
+	},
+	plus: {
+		model:         "@cf/moonshotai/kimi-k2.5",
+		dailyLimit:    500,
+		sessionMsgCap: null,
+		searchResults: 10,
+		searchDepth:   "basic",
+		images:        true,
+		mcp:           false,
+		scheduling:    false,
+		label:         "Plus",
+		modelLabel:    "Kimi K2.5",
+	},
+	agent: {
+		model:         "@cf/moonshotai/kimi-k2.6",
+		dailyLimit:    null,
+		sessionMsgCap: null,
+		searchResults: 20,
+		searchDepth:   "advanced",
+		images:        true,
+		mcp:           true,
+		scheduling:    true,
+		label:         "Agent",
+		modelLabel:    "Kimi K2.6",
+	},
+};
+
+// ── Plan resolution ───────────────────────────────────────────────────────────
+
+async function resolvePlan(request, env) {
+	// API key can come from:
+	//   1. X-IB-API-Key header  (server-side proxied requests, REST calls)
+	//   2. ?ib_key= query param  (browser WebSocket upgrades — browsers can't
+	//      set custom headers on WS connections, so we use a query param instead)
+	const url = new URL(request.url);
+	const apiKey = (
+		request.headers.get("x-ib-api-key")?.trim() ||
+		url.searchParams.get("ib_key")?.trim() ||
+		null
+	);
+
+	// No key → demo mode (public showroom)
+	if (!apiKey) {
+		return { plan: "demo", config: PLAN_CONFIG.demo, apiKey: null, record: null };
+	}
+
+	// Look up in KV
+	let record = null;
+	try {
+		if (env.IB_PLANS) {
+			const raw = await env.IB_PLANS.get(apiKey);
+			if (raw) record = JSON.parse(raw);
+		}
+	} catch (e) {
+		console.error("[IB] KV lookup failed:", e);
+	}
+
+	// Unknown key → deny
+	if (!record) {
+		return { plan: null, config: null, apiKey, record: null };
+	}
+
+	const plan = record.plan && PLAN_CONFIG[record.plan] ? record.plan : "light";
+	return { plan, config: PLAN_CONFIG[plan], apiKey, record };
+}
+
+// ── Tavily web search helper ─────────────────────────────────────────────────
+//
+// Tavily is used across all plans. The key differentiator between tiers is:
+//   Light / Plus  →  search_depth: "basic"   (fast, standard results)
+//   Agent / Demo  →  search_depth: "advanced" (deeper crawl, richer content)
+//
+// Secret name: TAVILY_API_KEY
+// Set with:   npx wrangler secret put TAVILY_API_KEY
+
+async function tavilySearch(query, count, depth, env) {
+	const apiKey = env.TAVILY_API_KEY;
+	if (!apiKey) {
+		return { error: "Web search is not configured on this instance." };
+	}
+	try {
+		const res = await fetch("https://api.tavily.com/search", {
+			method:  "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				api_key:          apiKey,
+				query,
+				max_results:      Math.min(count, 20),
+				search_depth:     depth || "basic",
+				include_answer:   false,
+				include_raw_content: false,
+			}),
+		});
+
+		if (!res.ok) {
+			const body = await res.text();
+			console.error("[IB] Tavily search error:", res.status, body);
+			return { error: `Search API returned ${res.status}` };
+		}
+
+		const data = await res.json();
+		const results = (data.results || []).slice(0, count).map((r) => ({
+			title:       r.title,
+			url:         r.url,
+			description: r.content,
+			score:       r.score || null,
+			published:   r.published_date || null,
+		}));
+
+		return { query, searchDepth: depth, resultCount: results.length, results };
+	} catch (e) {
+		console.error("[IB] Tavily search exception:", e);
+		return { error: String(e) };
+	}
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * The AI SDK's downloadAssets step runs `new URL(data)` on every file
+ * part's string data. Data URIs parse as valid URLs, so it tries to
+ * HTTP-fetch them and fails. Decode to Uint8Array so the SDK treats
+ * them as inline data instead.
+ */
 function inlineDataUrls(messages) {
 	return messages.map((msg) => {
 		if (msg.role !== "user" || typeof msg.content === "string") return msg;
@@ -41949,15 +42123,31 @@ function inlineDataUrls(messages) {
 				const match = part.data.match(/^data:([^;]+);base64,(.+)$/);
 				if (!match) return part;
 				const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
-				return {
-					...part,
-					data: bytes,
-					mediaType: match[1]
-				};
-			})
+				return { ...part, data: bytes, mediaType: match[1] };
+			}),
 		};
 	});
 }
+
+/**
+ * Strip file/image parts from messages for plans that don't support images.
+ * Replaces them with a polite upgrade prompt so the model has context.
+ */
+function stripImages(messages) {
+	return messages.map((msg) => {
+		if (msg.role !== "user" || typeof msg.content === "string") return msg;
+		const filtered = msg.content.filter((p) => p.type !== "file");
+		if (filtered.length === msg.content.length) return msg;
+		filtered.push({
+			type: "text",
+			text: "[The user attached an image, but image support is not available on their current plan. Politely let them know images require the Plus plan or higher, and invite them to upgrade at insertabot.io.]",
+		});
+		return { ...msg, content: filtered };
+	});
+}
+
+// ── ChatAgent ─────────────────────────────────────────────────────────────────
+
 var ChatAgent = class extends AIChatAgent {
 	constructor(..._args) {
 		super(..._args);
@@ -41974,148 +42164,271 @@ var ChatAgent = class extends AIChatAgent {
 			"removeServer"
 		]], 0, void 0, AIChatAgent).e;
 	}
+
 	onStart() {
 		this.mcp.configureOAuthCallback({ customHandler: (result) => {
 			if (result.authSuccess) return new Response("<script>window.close();<\/script>", {
 				headers: { "content-type": "text/html" },
-				status: 200
+				status: 200,
 			});
 			return new Response(`Authentication Failed: ${result.authError || "Unknown error"}`, {
 				headers: { "content-type": "text/plain" },
-				status: 400
+				status: 400,
 			});
 		} });
 	}
+
 	async addServer(name, url, token) {
 		const opts = token ? { transport: { headers: { Authorization: `Bearer ${token}` } } } : undefined;
 		return await this.addMcpServer(name, url, opts);
 	}
+
 	async removeServer(serverId) {
 		await this.removeMcpServer(serverId);
 	}
+
+	// ── Daily conversation counter ────────────────────────────────────────────
+
+	_today() {
+		return new Date().toISOString().slice(0, 10);
+	}
+
+	async _checkAndIncrementDaily(apiKey, dailyLimit) {
+		if (dailyLimit === null) return { count: 0, limit: null, allowed: true };
+		const today = this._today();
+		const key = `daily:${apiKey}:${today}`;
+		const current = (await this.ctx.storage.get(key)) || 0;
+		if (current >= dailyLimit) {
+			return { count: current, limit: dailyLimit, allowed: false };
+		}
+		await this.ctx.storage.put(key, current + 1);
+		// Schedule cleanup after 25h so storage stays lean
+		await this.ctx.storage.setAlarm(Date.now() + 25 * 60 * 60 * 1000);
+		return { count: current + 1, limit: dailyLimit, allowed: true };
+	}
+
+	// ── Demo session message cap ──────────────────────────────────────────────
+
+	async _isDemoCapReached(sessionMsgCap) {
+		if (!sessionMsgCap) return false;
+		const userMessages = this.messages.filter((m) => m.role === "user");
+		return userMessages.length > sessionMsgCap;
+	}
+
+	// ── Main chat handler ─────────────────────────────────────────────────────
+
 	async onChatMessage(_onFinish, options) {
-		const mcpTools = this.mcp.getAITools();
+		// Plan + API key injected by the fetch handler via enrichedEnv
+		const planName   = this.env.__IB_PLAN    || "demo";
+		const apiKey     = this.env.__IB_API_KEY || null;
+		const planConfig = PLAN_CONFIG[planName]  || PLAN_CONFIG.demo;
+
+		// ── Demo session cap ──────────────────────────────────────────────────
+		if (planConfig.sessionMsgCap) {
+			const capped = await this._isDemoCapReached(planConfig.sessionMsgCap);
+			if (capped) {
+				return new Response(
+					[
+						JSON.stringify({ type: "text-delta", delta: "You've reached the **30-message demo limit** for this session. [Sign up free at insertabot.io](https://insertabot.io) to keep going — no credit card needed!" }),
+						JSON.stringify({ type: "finish" }),
+					].join("\n"),
+					{ headers: { "Content-Type": "text/plain; charset=utf-8" } }
+				);
+			}
+		}
+
+		// ── Daily limit ───────────────────────────────────────────────────────
+		if (apiKey && planConfig.dailyLimit !== null) {
+			const { allowed, limit } = await this._checkAndIncrementDaily(apiKey, planConfig.dailyLimit);
+			if (!allowed) {
+				return new Response(
+					[
+						JSON.stringify({ type: "text-delta", delta: `You've used all **${limit} daily conversations** on the **${planConfig.label}** plan. Your limit resets at midnight UTC.\n\nReady for more? [Upgrade at insertabot.io](https://insertabot.io).` }),
+						JSON.stringify({ type: "finish" }),
+					].join("\n"),
+					{ headers: { "Content-Type": "text/plain; charset=utf-8" } }
+				);
+			}
+		}
+
+		// ── MCP tools (Agent plan only) ───────────────────────────────────────
+		const mcpTools     = planConfig.mcp ? this.mcp.getAITools() : {};
 		const mcpToolNames = Object.keys(mcpTools);
-		const mcpSection = mcpToolNames.length > 0
+		const mcpSection   = mcpToolNames.length > 0
 			? `\n\nYou have the following external tools available via connected add-ons: ${mcpToolNames.join(", ")}.\nUse them proactively and chain as many calls as needed to fully complete the user's request — do not stop halfway. For GitHub tasks: create branches, commit file changes, open pull requests, and verify results all in one go unless the user says otherwise. Always carry a task through to completion before reporting back.`
 			: "";
-		return streamText({
-			model: createWorkersAI({ binding: this.env.AI })("@cf/moonshotai/kimi-k2.5", { sessionAffinity: this.sessionAffinity }),
-			system: `You are InsertaBot, a helpful AI assistant. You are NOT Claude and were NOT created by Anthropic. You are powered by Kimi K2.5. You can check the weather, get the user's timezone, run calculations, schedule tasks, and understand images. When users share images, describe what you see and answer questions about them.
 
-${getSchedulePrompt({ date: /* @__PURE__ */ new Date() })}
+		// ── Message processing ────────────────────────────────────────────────
+		let processedMessages = await convertToModelMessages(this.messages);
+		processedMessages = inlineDataUrls(processedMessages);
+		if (!planConfig.images) {
+			processedMessages = stripImages(processedMessages);
+		}
 
-If the user asks to schedule a task, use the schedule tool to schedule the task.${mcpSection}`,
-			messages: pruneMessages({
-				messages: inlineDataUrls(await convertToModelMessages(this.messages)),
-				toolCalls: "before-last-2-messages"
+		// ── Web search tool ───────────────────────────────────────────────────
+		const searchResultCount = planConfig.searchResults;
+		const searchDepth       = planConfig.searchDepth;
+		const envRef = this.env;
+		const webSearchTool = tool({
+			description: "Search the web for current, real-time information. Use this proactively for news, current events, prices, sports scores, weather, or any fact that may have changed recently. Synthesise the results into a clear, direct answer — don't just list links.",
+			inputSchema: object$1({
+				query: string().describe("Specific, concise search query"),
 			}),
-			tools: {
-				...mcpTools,
-				getWeather: tool({
-					description: "Get the current weather for a city",
-					inputSchema: object$1({ city: string().describe("City name") }),
-					execute: async ({ city }) => {
-						const conditions = [
-							"sunny",
-							"cloudy",
-							"rainy",
-							"snowy"
-						];
-						return {
-							city,
-							temperature: Math.floor(Math.random() * 30) + 5,
-							condition: conditions[Math.floor(Math.random() * conditions.length)],
-							unit: "celsius"
-						};
-					}
+			execute: async ({ query }) => tavilySearch(query, searchResultCount, searchDepth, envRef),
+		});
+
+		// ── System prompt ─────────────────────────────────────────────────────
+		const imageNote    = planConfig.images
+			? " You can understand and analyse images — when a user shares one, describe what you see and answer questions about it."
+			: "";
+		const scheduleNote = planConfig.scheduling
+			? `\n\n${getSchedulePrompt({ date: /* @__PURE__ */ new Date() })}\n\nIf the user asks to schedule a task, use the scheduleTask tool.`
+			: "";
+
+		const systemPrompt =
+			`You are InsertaBot, a helpful AI assistant built by Mistyk Media. ` +
+			`You are NOT Claude and were NOT made by Anthropic. ` +
+			`You are running on the ${planConfig.modelLabel} model.` +
+			imageNote +
+			` You have access to real-time web search via the webSearch tool — use it proactively whenever the user asks about anything current, factual, or time-sensitive. Don't guess; search first.` +
+			scheduleNote +
+			mcpSection;
+
+		// ── Tool set ──────────────────────────────────────────────────────────
+		const tools = {
+			...mcpTools,
+			webSearch: webSearchTool,
+			getWeather: tool({
+				description: "Get the current weather for a city",
+				inputSchema: object$1({ city: string().describe("City name") }),
+				execute: async ({ city }) => {
+					const conditions = ["sunny", "cloudy", "rainy", "snowy"];
+					return {
+						city,
+						temperature: Math.floor(Math.random() * 30) + 5,
+						condition:   conditions[Math.floor(Math.random() * conditions.length)],
+						unit:        "celsius",
+					};
+				},
+			}),
+			getUserTimezone: tool({
+				description: "Get the user's timezone from their browser. Use this when you need to know the user's local time.",
+				inputSchema: object$1({}),
+			}),
+			calculate: tool({
+				description: "Perform a math calculation with two numbers. Requires user approval for large numbers.",
+				inputSchema: object$1({
+					a:        number$1().describe("First number"),
+					b:        number$1().describe("Second number"),
+					operator: _enum(["+", "-", "*", "/", "%"]).describe("Arithmetic operator"),
 				}),
-				getUserTimezone: tool({
-					description: "Get the user's timezone from their browser. Use this when you need to know the user's local time.",
-					inputSchema: object$1({})
-				}),
-				calculate: tool({
-					description: "Perform a math calculation with two numbers. Requires user approval for large numbers.",
-					inputSchema: object$1({
-						a: number$1().describe("First number"),
-						b: number$1().describe("Second number"),
-						operator: _enum([
-							"+",
-							"-",
-							"*",
-							"/",
-							"%"
-						]).describe("Arithmetic operator")
-					}),
-					needsApproval: async ({ a, b }) => Math.abs(a) > 1e3 || Math.abs(b) > 1e3,
-					execute: async ({ a, b, operator }) => {
-						const ops = {
-							"+": (x, y) => x + y,
-							"-": (x, y) => x - y,
-							"*": (x, y) => x * y,
-							"/": (x, y) => x / y,
-							"%": (x, y) => x % y
-						};
-						if (operator === "/" && b === 0) return { error: "Division by zero" };
-						return {
-							expression: `${a} ${operator} ${b}`,
-							result: ops[operator](a, b)
-						};
+				needsApproval: async ({ a, b }) => Math.abs(a) > 1e3 || Math.abs(b) > 1e3,
+				execute: async ({ a, b, operator }) => {
+					const ops = {
+						"+": (x, y) => x + y,
+						"-": (x, y) => x - y,
+						"*": (x, y) => x * y,
+						"/": (x, y) => x / y,
+						"%": (x, y) => x % y,
+					};
+					if (operator === "/" && b === 0) return { error: "Division by zero" };
+					return { expression: `${a} ${operator} ${b}`, result: ops[operator](a, b) };
+				},
+			}),
+		};
+
+		// Scheduling tools — Agent plan only
+		if (planConfig.scheduling) {
+			tools.scheduleTask = tool({
+				description: "Schedule a task to be executed at a later time. Use this when the user asks to be reminded or wants something done later.",
+				inputSchema: scheduleSchema,
+				execute: async ({ when, description }) => {
+					if (when.type === "no-schedule") return "Not a valid schedule input";
+					const input = when.type === "scheduled" ? when.date
+					            : when.type === "delayed"   ? when.delayInSeconds
+					            : when.type === "cron"      ? when.cron
+					            : null;
+					if (!input) return "Invalid schedule type";
+					try {
+						this.schedule(input, "executeTask", description, { idempotent: true });
+						return `Task scheduled: "${description}" (${when.type}: ${input})`;
+					} catch (error) {
+						return `Error scheduling task: ${error}`;
 					}
-				}),
-				scheduleTask: tool({
-					description: "Schedule a task to be executed at a later time. Use this when the user asks to be reminded or wants something done later.",
-					inputSchema: scheduleSchema,
-					execute: async ({ when, description }) => {
-						if (when.type === "no-schedule") return "Not a valid schedule input";
-						const input = when.type === "scheduled" ? when.date : when.type === "delayed" ? when.delayInSeconds : when.type === "cron" ? when.cron : null;
-						if (!input) return "Invalid schedule type";
-						try {
-							this.schedule(input, "executeTask", description, { idempotent: true });
-							return `Task scheduled: "${description}" (${when.type}: ${input})`;
-						} catch (error) {
-							return `Error scheduling task: ${error}`;
-						}
+				},
+			});
+			tools.getScheduledTasks = tool({
+				description: "List all tasks that have been scheduled",
+				inputSchema: object$1({}),
+				execute: async () => {
+					const tasks = this.getSchedules();
+					return tasks.length > 0 ? tasks : "No scheduled tasks found.";
+				},
+			});
+			tools.cancelScheduledTask = tool({
+				description: "Cancel a scheduled task by its ID",
+				inputSchema: object$1({ taskId: string().describe("The ID of the task to cancel") }),
+				execute: async ({ taskId }) => {
+					try {
+						this.cancelSchedule(taskId);
+						return `Task ${taskId} cancelled.`;
+					} catch (error) {
+						return `Error cancelling task: ${error}`;
 					}
-				}),
-				getScheduledTasks: tool({
-					description: "List all tasks that have been scheduled",
-					inputSchema: object$1({}),
-					execute: async () => {
-						const tasks = this.getSchedules();
-						return tasks.length > 0 ? tasks : "No scheduled tasks found.";
-					}
-				}),
-				cancelScheduledTask: tool({
-					description: "Cancel a scheduled task by its ID",
-					inputSchema: object$1({ taskId: string().describe("The ID of the task to cancel") }),
-					execute: async ({ taskId }) => {
-						try {
-							this.cancelSchedule(taskId);
-							return `Task ${taskId} cancelled.`;
-						} catch (error) {
-							return `Error cancelling task: ${error}`;
-						}
-					}
-				})
-			},
+				},
+			});
+		}
+
+		// ── Stream response ───────────────────────────────────────────────────
+		return streamText({
+			model: createWorkersAI({ binding: this.env.AI })(planConfig.model, { sessionAffinity: this.sessionAffinity }),
+			system: systemPrompt,
+			messages: pruneMessages({
+				messages: processedMessages,
+				toolCalls: "before-last-2-messages",
+			}),
+			tools,
 			stopWhen: stepCountIs(25),
-			abortSignal: options?.abortSignal
+			abortSignal: options?.abortSignal,
 		}).toUIMessageStreamResponse();
 	}
+
 	async executeTask(description, _task) {
-		console.log(`Executing scheduled task: ${description}`);
+		console.log(`[IB] Executing scheduled task: ${description}`);
 		this.broadcast(JSON.stringify({
-			type: "scheduled-task",
+			type:      "scheduled-task",
 			description,
-			timestamp: (/* @__PURE__ */ new Date()).toISOString()
+			timestamp: (/* @__PURE__ */ new Date()).toISOString(),
 		}));
 	}
 };
+
+// ── Worker entry point ────────────────────────────────────────────────────────
+
 //#endregion
 //#region \0virtual:cloudflare/worker-entry
-var worker_entry_default = { async fetch(request, env) {
-	return await routeAgentRequest(request, env) || new Response("Not found", { status: 404 });
-} };
+var worker_entry_default = {
+	async fetch(request, env) {
+		// Resolve which plan this request belongs to
+		const { plan, config, apiKey } = await resolvePlan(request, env);
+
+		// Unknown / invalid API key → 401
+		if (apiKey !== null && plan === null) {
+			return new Response(JSON.stringify({ error: "Invalid API key" }), {
+				status:  401,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+
+		// Inject plan context into the env object the Durable Object will see.
+		// Object.assign onto a fresh object so we don't mutate the real env.
+		const enrichedEnv = Object.assign(Object.create(null), env, {
+			__IB_PLAN:    plan    || "demo",
+			__IB_API_KEY: apiKey  || null,
+		});
+
+		return await routeAgentRequest(request, enrichedEnv) || new Response("Not found", { status: 404 });
+	},
+};
 //#endregion
 export { ChatAgent, worker_entry_default as default };

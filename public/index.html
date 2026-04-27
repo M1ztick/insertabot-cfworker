@@ -110,6 +110,44 @@
 				box-shadow: 0 0 8px rgba(0, 245, 212, 0.5);
 			}
 
+			/* ── Plan badge ── */
+			.plan-badge {
+				display: inline-flex;
+				align-items: center;
+				gap: 5px;
+				font-family: 'Space Mono', monospace;
+				font-size: 0.65rem;
+				font-weight: 700;
+				letter-spacing: 0.1em;
+				text-transform: uppercase;
+				padding: 3px 8px;
+				border-radius: 20px;
+				border: 1px solid;
+				white-space: nowrap;
+			}
+			.plan-badge.demo  { color: var(--cyan);    border-color: rgba(0,245,212,0.35);  background: rgba(0,245,212,0.07); }
+			.plan-badge.light { color: var(--text-muted); border-color: var(--border);       background: transparent; }
+			.plan-badge.plus  { color: #a78bfa;          border-color: rgba(167,139,250,0.4); background: rgba(167,139,250,0.08); }
+			.plan-badge.agent { color: var(--magenta);   border-color: var(--border-magenta); background: rgba(245,0,160,0.07); }
+
+			/* ── Demo banner ── */
+			.demo-banner {
+				display: none;
+				position: relative;
+				z-index: 1;
+				background: rgba(0, 245, 212, 0.06);
+				border-block-end: 1px solid rgba(0, 245, 212, 0.15);
+				padding: 7px 20px;
+				text-align: center;
+				font-family: 'Space Mono', monospace;
+				font-size: 0.68rem;
+				color: var(--text-muted);
+				flex-shrink: 0;
+			}
+			.demo-banner a { color: var(--cyan); text-decoration: none; }
+			.demo-banner a:hover { text-decoration: underline; }
+			.demo-banner.visible { display: block; }
+
 			.btn-ghost {
 				background: none;
 				border: 1px solid var(--border);
@@ -817,6 +855,7 @@
 				<line x1="16" y1="15" x2="16" y2="17" />
 			</svg>
 			<h1>InsertaBot</h1>
+			<span class="plan-badge demo" id="plan-badge" title="Current plan">Demo</span>
 			<div class="status">
 				<div class="dot" id="dot"></div>
 				<span id="status-text">Connecting…</span>
@@ -831,6 +870,10 @@
 			</button>
 			<button class="btn-ghost" id="new-chat">New chat</button>
 		</header>
+		<div class="demo-banner" id="demo-banner">
+			✦ You're in <strong>demo mode</strong> — up to 30 messages, no account needed.
+			<a href="https://insertabot.io" target="_blank" rel="noopener">Sign up free</a> to unlock Light, Plus, or Agent plans.
+		</div>
 
 		<div class="addons-backdrop" id="addons-backdrop"></div>
 		<aside class="addons-panel" id="addons-panel" aria-label="Add-ons">
@@ -1501,7 +1544,11 @@
 			// ── WebSocket ─────────────────────────────────────────────────────────────
 			function connect() {
 				const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-				ws = new WebSocket(`${proto}//${location.host}/agents/chat-agent/${instanceId}`);
+				// Pass the API key as a query param — browsers can't set custom headers
+				// on WebSocket upgrades, so this is the standard approach.
+				// The worker reads it from the URL and validates against KV.
+				const keyParam = IB_PARAMS.apiKey ? `?ib_key=${encodeURIComponent(IB_PARAMS.apiKey)}` : '';
+				ws = new WebSocket(`${proto}//${location.host}/agents/chat-agent/${instanceId}${keyParam}`);
 
 				ws.onopen = () => {
 					setConnected(true);
@@ -1658,6 +1705,63 @@
 			sendBtn.addEventListener('click', send);
 
 			// ── Boot ──────────────────────────────────────────────────────────────────
+
+			// Plan + API key resolution.
+			// Priority: URL param ?plan= / ?key=  →  <meta> tags  →  demo defaults.
+			// The WordPress plugin and insertabot.io platform embed these via meta tags
+			// or append them to the iframe/embed URL.
+			const IB_PARAMS = (function resolvePlanParams() {
+				const params  = new URLSearchParams(location.search);
+				const planMeta = document.querySelector('meta[name="ib-plan"]');
+				const keyMeta  = document.querySelector('meta[name="ib-api-key"]');
+
+				const VALID_PLANS = ['demo', 'light', 'plus', 'agent'];
+				const plan = (() => {
+					const p = params.get('plan') || planMeta?.content || 'demo';
+					return VALID_PLANS.includes(p) ? p : 'demo';
+				})();
+				const apiKey = params.get('key') || keyMeta?.content || null;
+
+				// Feature flags derived from plan
+				const PLAN_FEATURES = {
+					demo:  { images: true,  mcp: true  },
+					light: { images: false, mcp: false },
+					plus:  { images: true,  mcp: false },
+					agent: { images: true,  mcp: true  },
+				};
+				const features = PLAN_FEATURES[plan] || PLAN_FEATURES.demo;
+
+				return { plan, apiKey, features };
+			})();
+
+			// Apply plan badge + demo banner
+			(function applyPlanUI() {
+				const badge  = document.getElementById('plan-badge');
+				const banner = document.getElementById('demo-banner');
+				const labels = {
+					demo:  'Demo',
+					light: 'Light',
+					plus:  'Plus ✦',
+					agent: 'Agent ✦✦',
+				};
+				if (badge) {
+					badge.textContent = labels[IB_PARAMS.plan] || 'Demo';
+					badge.className   = `plan-badge ${IB_PARAMS.plan}`;
+				}
+				if (IB_PARAMS.plan === 'demo' && banner) {
+					banner.classList.add('visible');
+				}
+				// Show/hide attach button based on image support
+				if (attachBtn) {
+					attachBtn.style.display = IB_PARAMS.features.images ? '' : 'none';
+				}
+				// Hide add-ons button for non-agent plans
+				const addonsBtn = document.getElementById('addons-btn');
+				if (addonsBtn && !IB_PARAMS.features.mcp) {
+					addonsBtn.style.display = 'none';
+				}
+			})();
+
 			showEmpty();
 			connect();
 		</script>
