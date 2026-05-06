@@ -42028,12 +42028,22 @@ async function resolvePlan(request, env) {
 		null
 	);
 
-	// No key → demo mode (public showroom)
+	// No key → deny (not publicly accessible)
 	if (!apiKey) {
-		return { plan: "demo", config: PLAN_CONFIG.demo, apiKey: null, record: null };
+		return { plan: null, config: null, apiKey: null, record: null };
 	}
 
-	// Look up in KV
+	// Check against allowlisted keys stored as a comma-separated secret: IB_ALLOWED_KEYS
+	// e.g. wrangler secret put IB_ALLOWED_KEYS  →  "key1,key2,key3"
+	if (env.IB_ALLOWED_KEYS) {
+		const allowed = env.IB_ALLOWED_KEYS.split(",").map((k) => k.trim());
+		if (allowed.includes(apiKey)) {
+			return { plan: "agent", config: PLAN_CONFIG.agent, apiKey, record: null };
+		}
+		return { plan: null, config: null, apiKey, record: null };
+	}
+
+	// Fallback: KV lookup (for when platform access is re-enabled)
 	let record = null;
 	try {
 		if (env.IB_PLANS) {
@@ -42044,7 +42054,6 @@ async function resolvePlan(request, env) {
 		console.error("[IB] KV lookup failed:", e);
 	}
 
-	// Unknown key → deny
 	if (!record) {
 		return { plan: null, config: null, apiKey, record: null };
 	}
@@ -42408,6 +42417,14 @@ var ChatAgent = class extends AIChatAgent {
 //#endregion
 //#region \0virtual:cloudflare/worker-entry
 var worker_entry_default = {
+	async scheduled(event, env, ctx) {
+		// The Agents SDK handles scheduled tasks per Durable Object instance.
+		// Each ChatAgent instance self-manages its own task queue via SQLite.
+		// Wrangler routes the cron event here; individual agents tick themselves
+		// when a user connects or sends a message via the SDK's internal alarm.
+		// This handler exists so the cron binding is valid and can be extended.
+		console.log(`[IB] Cron fired: ${event.cron} at ${new Date(event.scheduledTime).toISOString()}`);
+	},
 	async fetch(request, env) {
 		// Resolve which plan this request belongs to
 		const { plan, config, apiKey } = await resolvePlan(request, env);
