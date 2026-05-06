@@ -870,10 +870,6 @@
 			</button>
 			<button class="btn-ghost" id="new-chat">New chat</button>
 		</header>
-		<div class="demo-banner" id="demo-banner">
-			✦ You're in <strong>demo mode</strong> — up to 30 messages, no account needed.
-			<a href="https://insertabot.io" target="_blank" rel="noopener">Sign up free</a> to unlock Light, Plus, or Agent plans.
-		</div>
 
 		<div class="addons-backdrop" id="addons-backdrop"></div>
 		<aside class="addons-panel" id="addons-panel" aria-label="Add-ons">
@@ -1717,8 +1713,8 @@
 
 				const VALID_PLANS = ['demo', 'light', 'plus', 'agent'];
 				const plan = (() => {
-					const p = params.get('plan') || planMeta?.content || 'demo';
-					return VALID_PLANS.includes(p) ? p : 'demo';
+					const p = params.get('plan') || planMeta?.content || 'agent';
+					return VALID_PLANS.includes(p) ? p : 'agent';
 				})();
 				const apiKey = params.get('key') || keyMeta?.content || null;
 
