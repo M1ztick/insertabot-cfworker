@@ -1,6 +1,6 @@
 {
 	"name": "insertabot-cfworker",
-	"main": "src/index.js",
+	"main": "dist/index.js",
 	"workers_dev": false,
 	"preview_urls": false,
 	"compatibility_date": "2026-03-02",
