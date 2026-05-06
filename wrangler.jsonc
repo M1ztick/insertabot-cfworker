@@ -1,55 +1,59 @@
 {
-  "name": "insertabot-cfworker",
-  "main": "src/index.js",
-  "workers_dev": false,
-  "preview_urls": false,
-  "compatibility_date": "2026-03-02",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
-  "routes": [
-    {
-      "pattern": "cfworker.insertabot.io",
-      "zone_name": "insertabot.io",
-      "custom_domain": true
-    }
-  ],
-  "observability": {
-    "enabled": true,
-    "logs": {
-      "enabled": true,
-      "invocation_logs": true
-    }
-  },
-  "assets": {
-    "directory": "./public"
-  },
-  "ai": {
-    "binding": "AI"
-  },
-  // KV namespace for API key → plan lookups
-  // Create with: npx wrangler kv namespace create IB_PLANS
-  // Then replace the id below with the real namespace ID
-  "kv_namespaces": [
-    {
-      "binding": "IB_PLANS",
-      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
-    }
-  ],
-  // Secrets (set via: npx wrangler secret put TAVILY_API_KEY)
-  // TAVILY_API_KEY — Tavily Search API key for real-time web search (all tiers)
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["ChatAgent"]
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "ChatAgent",
-        "class_name": "ChatAgent"
-      }
-    ]
-  }
+	"name": "insertabot-cfworker",
+	"main": "src/index.js",
+	"workers_dev": false,
+	"preview_urls": false,
+	"compatibility_date": "2026-03-02",
+	"compatibility_flags": ["nodejs_compat"],
+	"routes": [
+		{
+			"pattern": "cfworker.insertabot.io",
+			"zone_name": "insertabot.io",
+			"custom_domain": true,
+		},
+	],
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"persist": true,
+			"invocation_logs": true,
+		},
+		"traces": {
+			"enabled": true,
+			"persist": true,
+			"head_sampling_rate": 1,
+		},
+	},
+	"assets": {
+		"directory": "./public",
+	},
+	"ai": {
+		"binding": "AI",
+	},
+	"kv_namespaces": [
+		{
+			"binding": "IB_PLANS",
+			"id": "REPLACE_WITH_KV_NAMESPACE_ID",
+		},
+	],
+	"triggers": {
+		"crons": ["0 */1 * * *"],
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["ChatAgent"],
+		},
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "ChatAgent",
+				"class_name": "ChatAgent",
+			},
+		],
+	},
 }
