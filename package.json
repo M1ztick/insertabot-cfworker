@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "wrangler deploy",
+    "deploy": "npm run build && wrangler deploy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "build": "esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2022 --outfile=dist/index.js --external:cloudflare:*",
@@ -14,12 +14,5 @@
     "esbuild": "^0.25.0",
     "typescript": "^5.8.0",
     "wrangler": "^4.84.1"
-  },
-  "dependencies": {
-    "@ai-sdk/openai": "^3.0.62",
-    "@cloudflare/ai": "^1.2.2",
-    "agents": "^0.12.3",
-    "ai": "^6.0.175",
-    "zod": "^4.4.3"
   }
 }
