@@ -28,6 +28,16 @@ export default {
 		}
 
 		try {
+			// WebSocket upgrade for Agents SDK UI
+			if (url.pathname.startsWith('/agents/chat-agent/')) {
+				const id = url.pathname.split('/').pop();
+				if (!id) return new Response('Bad Request', { status: 400 });
+				
+				const doId = env.ChatAgent.idFromName(id);
+				const agent = env.ChatAgent.get(doId);
+				return agent.fetch(request);
+			}
+
 			switch (url.pathname) {
 				case '/v1/chat/completions':
 					return await handleChat(request, env);

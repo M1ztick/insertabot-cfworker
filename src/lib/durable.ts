@@ -27,6 +27,11 @@ export class ChatAgent implements DurableObject {
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 
+		// Handle WebSocket upgrade for Agents SDK UI
+		if (request.headers.get('Upgrade') === 'websocket') {
+			return this.handleWebSocket(request);
+		}
+
 		switch (url.pathname) {
 			case '/chat': {
 				if (request.method !== 'POST') return methodNotAllowed();
@@ -157,6 +162,166 @@ export class ChatAgent implements DurableObject {
 		};
 		await this.saveState(empty);
 		return new Response(JSON.stringify({ cleared: true }));
+	}
+
+	// ---- Storage helpers ----
+
+	/** Handle WebSocket connection for Agents SDK UI */
+	async handleWebSocket(request: Request): Promise<Response> {
+		const pair = new WebSocketPair();
+		const [client, server] = Object.values(pair);
+
+		this.state.acceptWebSocket(server);
+
+		// Send initial state
+		const stored = await this.getStoredState();
+		server.send(JSON.stringify({
+			type: 'cf_agent_chat_messages',
+			messages: stored.messages,
+		}));
+
+		return new Response(null, {
+			status: 101,
+			webSocket: client,
+		});
+	}
+
+	/** Handle incoming WebSocket messages */
+	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+		if (typeof message !== 'string') return;
+
+		try {
+			const data = JSON.parse(message);
+
+			if (data.type === 'cf_agent_use_chat_request') {
+				const body = JSON.parse(data.init.body);
+				const userMessages = body.messages || [];
+
+				// Process the chat request
+				const stored = await this.getStoredState();
+				stored.messages.push(...userMessages.filter((m: Message) => m.role === 'user'));
+				stored.lastActiveAt = Date.now();
+
+				// Call AI with tool calling
+				const systemPrompt = this.env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant with access to real-time web search and GitHub repository information.';
+				const model = '@cf/moonshotai/kimi-k2.6';
+				const tools = allTools();
+
+				const messages: Message[] = [
+					{ role: 'system', content: systemPrompt },
+					...stored.messages,
+				];
+
+				// Send start event
+				const messageId = `msg-${Date.now()}`;
+				ws.send(JSON.stringify({
+					type: 'cf_agent_use_chat_response',
+					id: data.id,
+					body: JSON.stringify({ type: 'start', messageId }),
+					done: false,
+				}));
+
+				// Tool calling loop
+				const maxIterations = 5;
+				let iteration = 0;
+				let finalText = '';
+
+				while (iteration < maxIterations) {
+					iteration++;
+
+					const response = await this.env.AI.run(model, {
+						messages,
+						tools,
+						stream: false,
+					});
+
+					if (response.tool_calls && response.tool_calls.length > 0) {
+						// Send tool call events
+						for (const toolCall of response.tool_calls) {
+							ws.send(JSON.stringify({
+								type: 'cf_agent_use_chat_response',
+								id: data.id,
+								body: JSON.stringify({ type: 'tool-call', toolName: toolCall.function.name }),
+								done: false,
+							}));
+						}
+
+						// Execute tools
+						const assistantMsg: Message = {
+							role: 'assistant',
+							content: response.response || '',
+							tool_calls: response.tool_calls,
+						};
+						stored.messages.push(assistantMsg);
+						messages.push(assistantMsg);
+
+						const toolResults = await executeToolCalls(response.tool_calls, this.env);
+						for (const result of toolResults) {
+							const toolMsg: Message = {
+								role: 'tool',
+								content: result.content,
+								tool_call_id: result.tool_call_id,
+							};
+							stored.messages.push(toolMsg);
+							messages.push(toolMsg);
+						}
+
+						continue;
+					}
+
+					// No tool calls - stream final response
+					finalText = response.response || '';
+					break;
+				}
+
+				// Stream the final text
+				const words = finalText.split(' ');
+				for (const word of words) {
+					ws.send(JSON.stringify({
+						type: 'cf_agent_use_chat_response',
+						id: data.id,
+						body: JSON.stringify({ type: 'text-delta', delta: word + ' ' }),
+						done: false,
+					}));
+				}
+
+				// Send finish event
+				ws.send(JSON.stringify({
+					type: 'cf_agent_use_chat_response',
+					id: data.id,
+					body: JSON.stringify({ type: 'finish' }),
+					done: true,
+				}));
+
+				// Save final message
+				const assistantMsg: Message = {
+					role: 'assistant',
+					content: finalText,
+				};
+				stored.messages.push(assistantMsg);
+				await this.saveState(stored);
+
+				// Send updated messages
+				ws.send(JSON.stringify({
+					type: 'cf_agent_chat_messages',
+					messages: stored.messages,
+				}));
+			}
+		} catch (err) {
+			console.error('WebSocket message error:', err);
+			ws.send(JSON.stringify({
+				type: 'cf_agent_use_chat_response',
+				id: 'error',
+				body: JSON.stringify({ type: 'error', errorText: (err as Error).message }),
+				done: true,
+			}));
+		}
+	}
+
+	/** Handle WebSocket close */
+	async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
+		// Cleanup if needed
+		ws.close();
 	}
 
 	// ---- Storage helpers ----
