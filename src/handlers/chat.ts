@@ -1,11 +1,12 @@
 /**
  * Chat completion handler
- * Supports streaming + non-streaming responses.
+ * Supports streaming + non-streaming responses with MCP tool calling.
  * Integrates Durable Objects for conversation history.
  */
 
-import type { ChatRequest, ChatResponseChunk, Message } from '../types';
+import type { ChatRequest, ChatResponseChunk, Message, ToolCall } from '../types';
 import { generateId, jsonResponse, corsHeaders } from '../lib/utils';
+import { allTools, executeToolCalls } from '../lib/mcp';
 
 export async function handleChat(request: Request, env: Env): Promise<Response> {
 	if (request.method === 'OPTIONS') {
@@ -39,7 +40,7 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
 }
 
 // ------------------------------------------------------------------
-// Non-streaming path
+// Non-streaming path with tool calling
 // ------------------------------------------------------------------
 
 async function handleNonStreamingChat(
@@ -48,24 +49,70 @@ async function handleNonStreamingChat(
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	_agent: any
 ): Promise<Response> {
-	const systemPrompt = env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant.';
+	const systemPrompt = env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant with access to real-time web search and GitHub repository information.';
 	const model = req.model || '@cf/moonshotai/kimi-k2.6';
+	const tools = allTools();
 
 	// Prepare messages with system prompt
-	const messages = [
+	const messages: Message[] = [
 		{ role: 'system', content: systemPrompt },
 		...req.messages,
 	];
 
 	try {
-		// Call Workers AI directly
-		const response = await env.AI.run(model, {
-			messages,
-			max_tokens: req.max_tokens,
-			temperature: req.temperature,
-			top_p: req.top_p,
-			stream: false,
-		});
+		// Tool calling loop - max 5 iterations to prevent infinite loops
+		const maxIterations = 5;
+		let iteration = 0;
+		let finalResponse: any = null;
+
+		while (iteration < maxIterations) {
+			iteration++;
+
+			// Call Workers AI with tools
+			const response = await env.AI.run(model, {
+				messages,
+				tools,
+				max_tokens: req.max_tokens,
+				temperature: req.temperature,
+				top_p: req.top_p,
+				stream: false,
+			});
+
+			// Check if the model wants to call tools
+			if (response.tool_calls && response.tool_calls.length > 0) {
+				console.log(`Tool calls requested (iteration ${iteration}):`, response.tool_calls);
+
+				// Add assistant message with tool calls to history
+				messages.push({
+					role: 'assistant',
+					content: response.response || '',
+					tool_calls: response.tool_calls,
+				});
+
+				// Execute all tool calls
+				const toolResults = await executeToolCalls(response.tool_calls, env);
+
+				// Add tool results to messages
+				for (const result of toolResults) {
+					messages.push({
+						role: 'tool',
+						content: result.content,
+						tool_call_id: result.tool_call_id,
+					});
+				}
+
+				// Continue loop to get final response
+				continue;
+			}
+
+			// No tool calls - we have the final response
+			finalResponse = response;
+			break;
+		}
+
+		if (!finalResponse) {
+			throw new Error('Max tool calling iterations reached');
+		}
 
 		const result: ChatResponseChunk = {
 			id: generateId('chat'),
@@ -75,7 +122,7 @@ async function handleNonStreamingChat(
 			choices: [
 				{
 					index: 0,
-					message: { role: 'assistant', content: response.response || '' },
+					message: { role: 'assistant', content: finalResponse.response || '' },
 					finish_reason: 'stop',
 				},
 			],
@@ -89,7 +136,7 @@ async function handleNonStreamingChat(
 }
 
 // ------------------------------------------------------------------
-// Streaming path (SSE)
+// Streaming path with tool calling (SSE)
 // ------------------------------------------------------------------
 
 async function handleStreamingChat(
@@ -99,50 +146,116 @@ async function handleStreamingChat(
 	_agent: any
 ): Promise<Response> {
 	const encoder = new TextEncoder();
-	const systemPrompt = env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant.';
+	const systemPrompt = env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant with access to real-time web search and GitHub repository information.';
 	const model = req.model || '@cf/moonshotai/kimi-k2.6';
+	const tools = allTools();
 
 	// Prepare messages with system prompt
-	const messages = [
+	const messages: Message[] = [
 		{ role: 'system', content: systemPrompt },
 		...req.messages,
 	];
 
 	const stream = new ReadableStream({
 		async start(controller) {
+			const chatId = generateId('chat');
+			const created = Math.floor(Date.now() / 1000);
+
 			try {
-				// Call Workers AI with streaming enabled
-				const response = await env.AI.run(model, {
-					messages,
-					max_tokens: req.max_tokens,
-					temperature: req.temperature,
-					top_p: req.top_p,
-					stream: true,
-				});
+				// Tool calling loop for streaming
+				const maxIterations = 5;
+				let iteration = 0;
 
-				const chatId = generateId('chat');
-				const created = Math.floor(Date.now() / 1000);
+				while (iteration < maxIterations) {
+					iteration++;
 
-				// Stream the response
-				if (response && typeof response[Symbol.asyncIterator] === 'function') {
-					for await (const chunk of response as AsyncIterable<any>) {
-						if (chunk.response) {
-							const event: ChatResponseChunk = {
-								id: chatId,
-								object: 'chat.completion.chunk',
-								created,
-								model,
-								choices: [
-									{
-										index: 0,
-										delta: { content: chunk.response },
-										finish_reason: null,
-									},
-								],
+					// Call Workers AI with tools (non-streaming for tool detection)
+					const response = await env.AI.run(model, {
+						messages,
+						tools,
+						max_tokens: req.max_tokens,
+						temperature: req.temperature,
+						top_p: req.top_p,
+						stream: false, // Use non-streaming for tool detection
+					});
+
+					// Check if the model wants to call tools
+					if (response.tool_calls && response.tool_calls.length > 0) {
+						console.log(`Tool calls requested (streaming iteration ${iteration}):`, response.tool_calls);
+
+						// Emit tool call events
+						for (const toolCall of response.tool_calls) {
+							const toolEvent = {
+								type: 'tool_call',
+								tool_name: toolCall.function.name,
+								tool_args: toolCall.function.arguments,
 							};
-							controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+							controller.enqueue(encoder.encode(`event: tool_call\ndata: ${JSON.stringify(toolEvent)}\n\n`));
+						}
+
+						// Add assistant message with tool calls
+						messages.push({
+							role: 'assistant',
+							content: response.response || '',
+							tool_calls: response.tool_calls,
+						});
+
+						// Execute tool calls
+						const toolResults = await executeToolCalls(response.tool_calls, env);
+
+						// Add tool results and emit events
+						for (const result of toolResults) {
+							messages.push({
+								role: 'tool',
+								content: result.content,
+								tool_call_id: result.tool_call_id,
+							});
+
+							const toolResultEvent = {
+								type: 'tool_result',
+								tool_call_id: result.tool_call_id,
+								result: result.content,
+							};
+							controller.enqueue(encoder.encode(`event: tool_result\ndata: ${JSON.stringify(toolResultEvent)}\n\n`));
+						}
+
+						// Continue loop
+						continue;
+					}
+
+					// No tool calls - stream the final response
+					const finalResponse = await env.AI.run(model, {
+						messages,
+						max_tokens: req.max_tokens,
+						temperature: req.temperature,
+						top_p: req.top_p,
+						stream: true,
+					});
+
+					// Stream the response
+					if (finalResponse && typeof finalResponse[Symbol.asyncIterator] === 'function') {
+						for await (const chunk of finalResponse as AsyncIterable<any>) {
+							if (chunk.response) {
+								const event: ChatResponseChunk = {
+									id: chatId,
+									object: 'chat.completion.chunk',
+									created,
+									model,
+									choices: [
+										{
+											index: 0,
+											delta: { content: chunk.response },
+											finish_reason: null,
+										},
+									],
+								};
+								controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+							}
 						}
 					}
+
+					// Done - exit loop
+					break;
 				}
 
 				// Final chunk with finish reason

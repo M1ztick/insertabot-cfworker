@@ -4,6 +4,7 @@
  */
 
 import type { Message, ChatRequest } from '../types';
+import { allTools, executeToolCalls } from './mcp';
 
 export interface ChatAgentState {
 	messages: Message[];
@@ -45,7 +46,7 @@ export class ChatAgent implements DurableObject {
 		}
 	}
 
-	/** Append messages and return full history */
+	/** Append messages and return full history with tool calling */
 	async handleChat(req: ChatRequest): Promise<Response> {
 		const stored = await this.getStoredState();
 
@@ -53,28 +54,78 @@ export class ChatAgent implements DurableObject {
 		stored.messages.push(...req.messages);
 		stored.lastActiveAt = Date.now();
 
-		// Call Workers AI with conversation history
-		const systemPrompt = this.env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant.';
+		// Call Workers AI with conversation history and tools
+		const systemPrompt = this.env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant with access to real-time web search and GitHub repository information.';
 		const model = req.model || '@cf/moonshotai/kimi-k2.6';
+		const tools = allTools();
 
 		// Prepare messages with system prompt
-		const messages = [
+		const messages: Message[] = [
 			{ role: 'system', content: systemPrompt },
 			...stored.messages,
 		];
 
 		try {
-			const response = await this.env.AI.run(model, {
-				messages,
-				max_tokens: req.max_tokens,
-				temperature: req.temperature,
-				top_p: req.top_p,
-				stream: false,
-			});
+			// Tool calling loop
+			const maxIterations = 5;
+			let iteration = 0;
+			let finalResponse: any = null;
+
+			while (iteration < maxIterations) {
+				iteration++;
+
+				const response = await this.env.AI.run(model, {
+					messages,
+					tools,
+					max_tokens: req.max_tokens,
+					temperature: req.temperature,
+					top_p: req.top_p,
+					stream: false,
+				});
+
+				// Check for tool calls
+				if (response.tool_calls && response.tool_calls.length > 0) {
+					console.log(`DO: Tool calls requested (iteration ${iteration}):`, response.tool_calls);
+
+					// Add assistant message with tool calls
+					const assistantMsg: Message = {
+						role: 'assistant',
+						content: response.response || '',
+						tool_calls: response.tool_calls,
+					};
+					stored.messages.push(assistantMsg);
+					messages.push(assistantMsg);
+
+					// Execute tool calls
+					const toolResults = await executeToolCalls(response.tool_calls, this.env);
+
+					// Add tool results
+					for (const result of toolResults) {
+						const toolMsg: Message = {
+							role: 'tool',
+							content: result.content,
+							tool_call_id: result.tool_call_id,
+						};
+						stored.messages.push(toolMsg);
+						messages.push(toolMsg);
+					}
+
+					// Continue loop
+					continue;
+				}
+
+				// No tool calls - final response
+				finalResponse = response;
+				break;
+			}
+
+			if (!finalResponse) {
+				throw new Error('Max tool calling iterations reached');
+			}
 
 			const assistantMsg: Message = {
 				role: 'assistant',
-				content: response.response || '',
+				content: finalResponse.response || '',
 			};
 			stored.messages.push(assistantMsg);
 

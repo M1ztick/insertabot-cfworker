@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Test script for InsertaBot Workers AI implementation
+# Test script for InsertaBot Workers AI + MCP implementation
 # Usage: ./test.sh [base-url]
 # Example: ./test.sh http://localhost:8787
 
 BASE_URL="${1:-http://localhost:8787}"
 
-echo "🧪 Testing InsertaBot Workers AI Implementation"
+echo "🧪 Testing InsertaBot Workers AI + MCP Implementation"
 echo "Base URL: $BASE_URL"
 echo ""
 
@@ -43,8 +43,36 @@ curl -s -X POST "$BASE_URL/v1/chat/completions" \
   }' | head -n 10
 echo ""
 
-# Test 4: Conversation with Durable Object
-echo "4️⃣  Testing conversation persistence..."
+# Test 4: MCP Tool - Web Search
+echo "4️⃣  Testing MCP tool calling (Tavily search)..."
+echo "Asking AI to search the web:"
+curl -s -X POST "$BASE_URL/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "@cf/moonshotai/kimi-k2.6",
+    "messages": [
+      {"role": "user", "content": "Search the web for the latest news about Cloudflare Workers and give me a brief summary"}
+    ],
+    "stream": false
+  }' | jq '.choices[0].message.content'
+echo ""
+
+# Test 5: MCP Tool - GitHub
+echo "5️⃣  Testing GitHub tool..."
+echo "Asking AI about a GitHub repo:"
+curl -s -X POST "$BASE_URL/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "@cf/moonshotai/kimi-k2.6",
+    "messages": [
+      {"role": "user", "content": "Tell me about the cloudflare/workers-sdk GitHub repository"}
+    ],
+    "stream": false
+  }' | jq '.choices[0].message.content'
+echo ""
+
+# Test 6: Conversation with Durable Object
+echo "6️⃣  Testing conversation persistence..."
 CONV_ID="test-$(date +%s)"
 echo "Conversation ID: $CONV_ID"
 
@@ -75,3 +103,8 @@ curl -s -X POST "$BASE_URL/v1/chat/completions" \
 
 echo ""
 echo "✅ Tests complete!"
+echo ""
+echo "📝 Notes:"
+echo "  - Tool calling requires TAVILY_API_KEY and GITHUB_TOKEN secrets"
+echo "  - If tool tests fail, check: wrangler secret list"
+echo "  - View logs: wrangler tail"
