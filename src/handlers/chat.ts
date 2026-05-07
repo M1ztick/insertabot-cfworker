@@ -4,7 +4,8 @@
  * Integrates Durable Objects for conversation history.
  */
 
-import type { ChatRequest, ChatResponseChunk, Message, ToolCall } from '../types';
+import type { AiResponse, ChatRequest, ChatResponseChunk, Message, ToolCall } from '../types';
+import type { Env } from '../worker-configuration';
 import { generateId, jsonResponse, corsHeaders } from '../lib/utils';
 import { allTools, executeToolCalls } from '../lib/mcp';
 
@@ -76,7 +77,7 @@ async function handleNonStreamingChat(
 				temperature: req.temperature,
 				top_p: req.top_p,
 				stream: false,
-			});
+			}) as AiResponse;
 
 			// Check if the model wants to call tools
 			if (response.tool_calls && response.tool_calls.length > 0) {
@@ -177,7 +178,7 @@ async function handleStreamingChat(
 						temperature: req.temperature,
 						top_p: req.top_p,
 						stream: false, // Use non-streaming for tool detection
-					});
+					}) as AiResponse;
 
 					// Check if the model wants to call tools
 					if (response.tool_calls && response.tool_calls.length > 0) {
@@ -230,11 +231,11 @@ async function handleStreamingChat(
 						temperature: req.temperature,
 						top_p: req.top_p,
 						stream: true,
-					});
+					}) as unknown as AsyncIterable<{ response?: string }>;
 
 					// Stream the response
-					if (finalResponse && typeof finalResponse[Symbol.asyncIterator] === 'function') {
-						for await (const chunk of finalResponse as AsyncIterable<any>) {
+					if (finalResponse && typeof (finalResponse as any)[Symbol.asyncIterator] === 'function') {
+						for await (const chunk of finalResponse) {
 							if (chunk.response) {
 								const event: ChatResponseChunk = {
 									id: chatId,

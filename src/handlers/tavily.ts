@@ -5,6 +5,7 @@
 
 import { jsonResponse, corsHeaders } from '../lib/utils';
 import type { TavilySearchResponse } from '../types';
+import type { Env } from '../worker-configuration';
 
 export async function handleTavily(request: Request, env: Env): Promise<Response> {
 	if (request.method === 'OPTIONS') {

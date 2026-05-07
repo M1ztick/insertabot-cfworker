@@ -3,8 +3,8 @@
  * Manages tool definitions and dispatches tool calls to GitHub / Tavily / etc.
  */
 
-import type { Env } from '../worker-configuration';
 import type { ToolDefinition, ToolCall, Message } from '../types';
+import type { Env } from '../worker-configuration';
 import { safeJsonParse } from './utils';
 
 // ------------------------------------------------------------------

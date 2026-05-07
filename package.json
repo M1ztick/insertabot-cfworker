@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "npx esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2022 --outfile=dist/index.js --external:cloudflare:* && npx wrangler deploy",
+    "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
-    "build": "npx esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2022 --outfile=dist/index.js --external:cloudflare:*",
+    "build": "wrangler deploy --dry-run --outdir=dist",
     "types": "wrangler types"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260507.1",
     "esbuild": "^0.25.0",
     "typescript": "^5.8.0",
     "wrangler": "^4.84.1"

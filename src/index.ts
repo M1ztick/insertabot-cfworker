@@ -9,6 +9,7 @@
  *   *    /                       → Public assets (from ./public)
  */
 
+import type { Env } from './worker-configuration';
 import { handleChat } from './handlers/chat';
 import { handleHealth } from './handlers/health';
 import { handleGithub } from './handlers/github';
@@ -19,6 +20,11 @@ import { corsHeaders } from './lib/utils';
 export { ChatAgent } from './lib/durable';
 
 export default {
+	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+		// Cron handler — extend this for periodic tasks (cache refresh, health pings, etc.)
+		console.log(`Scheduled cron fired: ${event.cron} at ${new Date(event.scheduledTime).toISOString()}`);
+	},
+
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 
