@@ -5,8 +5,7 @@
  */
 
 import type { ChatRequest, ChatResponseChunk, Message } from '../types';
-import { generateId, jsonResponse, sseStream, corsHeaders, safeJsonParse } from '../lib/utils';
-import { allTools, executeToolCalls } from '../lib/mcp';
+import { generateId, jsonResponse, corsHeaders } from '../lib/utils';
 
 export async function handleChat(request: Request, env: Env): Promise<Response> {
 	if (request.method === 'OPTIONS') {
@@ -47,32 +46,46 @@ async function handleNonStreamingChat(
 	req: ChatRequest,
 	env: Env,
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	_agent: any // DurableObjectStub — typed properly when DO class is imported
+	_agent: any
 ): Promise<Response> {
-	// TODO: Replace this placeholder with your actual inference pipeline.
-	// Right now it just echoes back using a system prompt + the last user message.
-
 	const systemPrompt = env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant.';
-	const messagesWithSystem: Message[] = [{ role: 'system', content: systemPrompt }, ...req.messages];
+	const model = req.model || '@cf/moonshotai/kimi-k2.6';
 
-	// Placeholder response until you wire Workers AI or external API
-	const assistantContent = `[Placeholder response] Received ${req.messages.length} messages. System prompt: "${systemPrompt}"`;
+	// Prepare messages with system prompt
+	const messages = [
+		{ role: 'system', content: systemPrompt },
+		...req.messages,
+	];
 
-	const response: ChatResponseChunk = {
-		id: generateId('chat'),
-		object: 'chat.completion',
-		created: Math.floor(Date.now() / 1000),
-		model: req.model || 'insertabot-cfworker',
-		choices: [
-			{
-				index: 0,
-				message: { role: 'assistant', content: assistantContent },
-				finish_reason: 'stop',
-			},
-		],
-	};
+	try {
+		// Call Workers AI directly
+		const response = await env.AI.run(model, {
+			messages,
+			max_tokens: req.max_tokens,
+			temperature: req.temperature,
+			top_p: req.top_p,
+			stream: false,
+		});
 
-	return jsonResponse(response, 200, corsHeaders());
+		const result: ChatResponseChunk = {
+			id: generateId('chat'),
+			object: 'chat.completion',
+			created: Math.floor(Date.now() / 1000),
+			model,
+			choices: [
+				{
+					index: 0,
+					message: { role: 'assistant', content: response.response || '' },
+					finish_reason: 'stop',
+				},
+			],
+		};
+
+		return jsonResponse(result, 200, corsHeaders());
+	} catch (err) {
+		console.error('Non-streaming chat error:', err);
+		return jsonResponse({ error: (err as Error).message }, 500, corsHeaders());
+	}
 }
 
 // ------------------------------------------------------------------
@@ -86,44 +99,77 @@ async function handleStreamingChat(
 	_agent: any
 ): Promise<Response> {
 	const encoder = new TextEncoder();
+	const systemPrompt = env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant.';
+	const model = req.model || '@cf/moonshotai/kimi-k2.6';
+
+	// Prepare messages with system prompt
+	const messages = [
+		{ role: 'system', content: systemPrompt },
+		...req.messages,
+	];
 
 	const stream = new ReadableStream({
 		async start(controller) {
-			dispatchEvent(controller, 'connected', { status: 'stream open' });
-
 			try {
-				// TODO: Replace with actual LLM streaming call.
-				// For now, emit a few placeholder chunks so the client sees streaming works.
-				const chunks = [
-					'Hello',
-					' from',
-					' InsertaBot!',
-					' (Streaming is wired — replace this with Workers AI or OpenAI stream)',
-				];
+				// Call Workers AI with streaming enabled
+				const response = await env.AI.run(model, {
+					messages,
+					max_tokens: req.max_tokens,
+					temperature: req.temperature,
+					top_p: req.top_p,
+					stream: true,
+				});
 
-				for (const text of chunks) {
-					const event: ChatResponseChunk = {
-						id: generateId('chat'),
-						object: 'chat.completion.chunk',
-						created: Math.floor(Date.now() / 1000),
-						model: req.model || 'insertabot-cfworker',
-						choices: [
-							{
-								index: 0,
-								delta: { role: 'assistant', content: text },
-								finish_reason: null,
-							},
-						],
-					};
-					dispatchEvent(controller, 'data', event);
-					// Fake word-by-word delay
-					await new Promise((r) => setTimeout(r, 80));
+				const chatId = generateId('chat');
+				const created = Math.floor(Date.now() / 1000);
+
+				// Stream the response
+				if (response && typeof response[Symbol.asyncIterator] === 'function') {
+					for await (const chunk of response as AsyncIterable<any>) {
+						if (chunk.response) {
+							const event: ChatResponseChunk = {
+								id: chatId,
+								object: 'chat.completion.chunk',
+								created,
+								model,
+								choices: [
+									{
+										index: 0,
+										delta: { content: chunk.response },
+										finish_reason: null,
+									},
+								],
+							};
+							controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+						}
+					}
 				}
 
-				// Final [DONE] event (OpenAI compatibility)
+				// Final chunk with finish reason
+				const finalChunk: ChatResponseChunk = {
+					id: chatId,
+					object: 'chat.completion.chunk',
+					created,
+					model,
+					choices: [
+						{
+							index: 0,
+							delta: {},
+							finish_reason: 'stop',
+						},
+					],
+				};
+				controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`));
 				controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 			} catch (err) {
-				dispatchEvent(controller, 'error', { message: (err as Error).message });
+				console.error('Streaming error:', err);
+				const errorEvent = {
+					error: {
+						message: (err as Error).message,
+						type: 'server_error',
+					},
+				};
+				controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorEvent)}\n\n`));
 			} finally {
 				controller.close();
 			}
@@ -138,18 +184,4 @@ async function handleStreamingChat(
 			...corsHeaders(),
 		},
 	});
-}
-
-// ------------------------------------------------------------------
-// SSE helpers
-// ------------------------------------------------------------------
-
-function dispatchEvent(
-	controller: ReadableStreamDefaultController<Uint8Array>,
-	event: string,
-	data: unknown
-): void {
-	const encoder = new TextEncoder();
-	const payload = typeof data === 'string' ? data : JSON.stringify(data);
-	controller.enqueue(encoder.encode(`event: ${event}\ndata: ${payload}\n\n`));
 }

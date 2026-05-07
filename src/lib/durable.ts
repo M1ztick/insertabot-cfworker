@@ -53,18 +53,42 @@ export class ChatAgent implements DurableObject {
 		stored.messages.push(...req.messages);
 		stored.lastActiveAt = Date.now();
 
-		// TODO: Here is where you'd call the LLM ( Workers AI or external API)
-		// For now, we store and echo back until you wire your inference path.
-		const assistantMsg: Message = {
-			role: 'assistant',
-			content: '[ChatAgent placeholder — wire up LLM inference in src/handlers/chat.ts]',
-		};
-		stored.messages.push(assistantMsg);
+		// Call Workers AI with conversation history
+		const systemPrompt = this.env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant.';
+		const model = req.model || '@cf/moonshotai/kimi-k2.6';
 
-		await this.saveState(stored);
-		return new Response(JSON.stringify({ messages: stored.messages }), {
-			headers: { 'Content-Type': 'application/json' },
-		});
+		// Prepare messages with system prompt
+		const messages = [
+			{ role: 'system', content: systemPrompt },
+			...stored.messages,
+		];
+
+		try {
+			const response = await this.env.AI.run(model, {
+				messages,
+				max_tokens: req.max_tokens,
+				temperature: req.temperature,
+				top_p: req.top_p,
+				stream: false,
+			});
+
+			const assistantMsg: Message = {
+				role: 'assistant',
+				content: response.response || '',
+			};
+			stored.messages.push(assistantMsg);
+
+			await this.saveState(stored);
+			return new Response(JSON.stringify({ messages: stored.messages }), {
+				headers: { 'Content-Type': 'application/json' },
+			});
+		} catch (err) {
+			console.error('ChatAgent inference error:', err);
+			return new Response(
+				JSON.stringify({ error: (err as Error).message }),
+				{ status: 500, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
 	}
 
 	async getHistory(): Promise<Response> {

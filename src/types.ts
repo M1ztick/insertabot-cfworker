@@ -56,6 +56,11 @@ export interface ChatResponseChunk {
 		message?: Message;
 		finish_reason: string | null;
 	}>;
+	usage?: {
+		promptTokens?: number;
+		completionTokens?: number;
+		totalTokens?: number;
+	};
 }
 
 export interface GithubToolCall {
