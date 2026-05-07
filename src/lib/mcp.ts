@@ -13,47 +13,54 @@ import { safeJsonParse } from './utils';
 
 export const GITHUB_TOOLS: ToolDefinition[] = [
 	{
-		name: 'github_repo_info',
-		description: 'Get information about a GitHub repository',
-		parameters: {
-			type: 'object',
-			properties: {
-				owner: { type: 'string', description: 'Repository owner (user or org)' },
-				repo: { type: 'string', description: 'Repository name' },
+		type: 'function',
+		function: {
+			name: 'github_repo_info',
+			description: 'Get information about a GitHub repository',
+			parameters: {
+				type: 'object',
+				properties: {
+					owner: { type: 'string', description: 'Repository owner (user or org)' },
+					repo: { type: 'string', description: 'Repository name' },
+				},
+				required: ['owner', 'repo'],
 			},
-			required: ['owner', 'repo'],
 		},
 	},
 	{
-		name: 'github_list_issues',
-		description: 'List open issues in a GitHub repository',
-		parameters: {
-			type: 'object',
-			properties: {
-				owner: { type: 'string' },
-				repo: { type: 'string' },
-				state: { type: 'string', enum: ['open', 'closed', 'all'], default: 'open' },
-				per_page: { type: 'integer', default: 10 },
+		type: 'function',
+		function: {
+			name: 'github_list_issues',
+			description: 'List open issues in a GitHub repository',
+			parameters: {
+				type: 'object',
+				properties: {
+					owner: { type: 'string' },
+					repo: { type: 'string' },
+					state: { type: 'string', enum: ['open', 'closed', 'all'], default: 'open' },
+					per_page: { type: 'integer', default: 10 },
+				},
+				required: ['owner', 'repo'],
 			},
-			required: ['owner', 'repo'],
 		},
 	},
-	// TODO: Add more GitHub tools as you need them:
-	// github_get_file_contents, github_create_pull_request, github_push_files, etc.
 ];
 
 export const TAVILY_TOOLS: ToolDefinition[] = [
 	{
-		name: 'tavily_search',
-		description: 'Search the web for current information',
-		parameters: {
-			type: 'object',
-			properties: {
-				query: { type: 'string', description: 'Search query' },
-				max_results: { type: 'integer', default: 5 },
-				include_answer: { type: 'boolean', default: true },
+		type: 'function',
+		function: {
+			name: 'tavily_search',
+			description: 'Search the web for current information',
+			parameters: {
+				type: 'object',
+				properties: {
+					query: { type: 'string', description: 'Search query' },
+					max_results: { type: 'integer', default: 5 },
+					include_answer: { type: 'boolean', default: true },
+				},
+				required: ['query'],
 			},
-			required: ['query'],
 		},
 	},
 ];
