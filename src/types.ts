@@ -5,7 +5,7 @@
 
 export interface Message {
 	role: 'system' | 'user' | 'assistant' | 'tool';
-	content: string;
+	content: string | null;
 	name?: string;
 	tool_calls?: ToolCall[];
 	tool_call_id?: string;

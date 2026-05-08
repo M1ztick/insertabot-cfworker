@@ -92,7 +92,7 @@ async function handleNonStreamingChat(
 				// Add assistant message with tool calls to history
 				messages.push({
 					role: 'assistant',
-					content: response.response || '',
+					content: null,
 					tool_calls: response.tool_calls,
 				});
 
@@ -105,7 +105,15 @@ async function handleNonStreamingChat(
 						role: 'tool',
 						content: result.content,
 						tool_call_id: result.tool_call_id,
+						name: result.tool_call_id,
 					});
+				}
+
+				// If every tool call failed, stop looping to avoid burning iterations
+				const allFailed = toolResults.every(r => r.content.startsWith('Error executing tool:'));
+				if (allFailed) {
+					finalResponse = { response: toolResults.map(r => r.content).join('\n') };
+					break;
 				}
 
 				// Continue loop to get final response
@@ -209,7 +217,7 @@ async function handleStreamingChat(
 						// Add assistant message with tool calls
 						messages.push({
 							role: 'assistant',
-							content: response.response || '',
+							content: null,
 							tool_calls: response.tool_calls,
 						});
 
@@ -222,6 +230,7 @@ async function handleStreamingChat(
 								role: 'tool',
 								content: result.content,
 								tool_call_id: result.tool_call_id,
+								name: result.tool_call_id,
 							});
 
 							const toolResultEvent = {
@@ -231,6 +240,10 @@ async function handleStreamingChat(
 							};
 							controller.enqueue(encoder.encode(`event: tool_result\ndata: ${JSON.stringify(toolResultEvent)}\n\n`));
 						}
+
+						// If every tool call failed, bail out
+						const allFailed = toolResults.every(r => r.content.startsWith('Error executing tool:'));
+						if (allFailed) break;
 
 						// Continue loop
 						continue;

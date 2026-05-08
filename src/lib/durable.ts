@@ -102,7 +102,7 @@ export class ChatAgent implements DurableObject {
 					// Add assistant message with tool calls
 					const assistantMsg: Message = {
 						role: 'assistant',
-						content: response.response || '',
+						content: null,
 						tool_calls: response.tool_calls,
 					};
 					stored.messages.push(assistantMsg);
@@ -117,9 +117,17 @@ export class ChatAgent implements DurableObject {
 							role: 'tool',
 							content: result.content,
 							tool_call_id: result.tool_call_id,
+							name: result.tool_call_id,
 						};
 						stored.messages.push(toolMsg);
 						messages.push(toolMsg);
+					}
+
+					// If every tool call failed, stop looping
+					const allFailed = toolResults.every(r => r.content.startsWith('Error executing tool:'));
+					if (allFailed) {
+						finalResponse = { response: toolResults.map(r => r.content).join('\n') };
+						break;
 					}
 
 					// Continue loop
@@ -262,7 +270,7 @@ export class ChatAgent implements DurableObject {
 						// Execute tools
 						const assistantMsg: Message = {
 							role: 'assistant',
-							content: response.response || '',
+							content: null,
 							tool_calls: response.tool_calls,
 						};
 						stored.messages.push(assistantMsg);
@@ -274,10 +282,14 @@ export class ChatAgent implements DurableObject {
 								role: 'tool',
 								content: result.content,
 								tool_call_id: result.tool_call_id,
+								name: result.tool_call_id,
 							};
 							stored.messages.push(toolMsg);
 							messages.push(toolMsg);
 						}
+
+						// If every tool call failed, stop looping
+						if (toolResults.every(r => r.content.startsWith('Error executing tool:'))) break;
 
 						continue;
 					}
