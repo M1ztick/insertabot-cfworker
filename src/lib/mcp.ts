@@ -56,9 +56,16 @@ export const TAVILY_TOOLS: ToolDefinition[] = [
 	},
 ];
 
-/** All available tools */
-export function allTools(): ToolDefinition[] {
-	return [...GITHUB_TOOLS, ...TAVILY_TOOLS];
+/** All available tools in OpenAI-wrapped format (required by SGLang-backed models) */
+export function allTools(): unknown[] {
+	return [...GITHUB_TOOLS, ...TAVILY_TOOLS].map(tool => ({
+		type: 'function',
+		function: {
+			name: tool.name,
+			description: tool.description,
+			parameters: tool.parameters,
+		},
+	}));
 }
 
 /**
