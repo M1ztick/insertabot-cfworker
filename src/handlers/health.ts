@@ -4,6 +4,7 @@
  */
 
 import { jsonResponse, corsHeaders } from '../lib/utils';
+import type { Env } from '../worker-configuration';
 
 export async function handleHealth(request: Request, env: Env): Promise<Response> {
 	if (request.method === 'OPTIONS') {

@@ -21,12 +21,15 @@ export interface ToolCall {
 }
 
 export interface ToolDefinition {
-	name: string;
-	description: string;
-	parameters: {
-		type: 'object';
-		properties: Record<string, unknown>;
-		required?: string[];
+	type: 'function';
+	function: {
+		name: string;
+		description: string;
+		parameters: {
+			type: 'object';
+			properties: Record<string, unknown>;
+			required?: string[];
+		};
 	};
 }
 
@@ -74,6 +77,15 @@ export interface TavilySearchResult {
 	url: string;
 	content: string;
 	score: number;
+}
+
+/**
+ * Workers AI inference response shape (non-streaming).
+ * env.AI.run() returns `unknown` — cast to this where needed.
+ */
+export interface AiResponse {
+	response?: string;
+	tool_calls?: import('./types').ToolCall[];
 }
 
 export interface TavilySearchResponse {

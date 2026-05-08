@@ -3,7 +3,8 @@
  * Handles per-conversation state: message history, context window, tool results.
  */
 
-import type { Message, ChatRequest } from '../types';
+import type { AiResponse, Message, ChatRequest } from '../types';
+import type { Env } from '../worker-configuration';
 import { allTools, executeToolCalls } from './mcp';
 
 export interface ChatAgentState {
@@ -86,7 +87,7 @@ export class ChatAgent implements DurableObject {
 					temperature: req.temperature,
 					top_p: req.top_p,
 					stream: false,
-				});
+				}) as AiResponse;
 
 				// Check for tool calls
 				if (response.tool_calls && response.tool_calls.length > 0) {
@@ -233,7 +234,7 @@ export class ChatAgent implements DurableObject {
 						messages,
 						tools,
 						stream: false,
-					});
+					}) as AiResponse;
 
 					if (response.tool_calls && response.tool_calls.length > 0) {
 						// Send tool call events
