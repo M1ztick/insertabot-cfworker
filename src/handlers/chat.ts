@@ -7,7 +7,7 @@
 import type { AiResponse, ChatRequest, ChatResponseChunk, Message, ToolCall } from '../types';
 import type { Env } from '../worker-configuration';
 import { generateId, jsonResponse, corsHeaders } from '../lib/utils';
-import { allTools, executeToolCalls } from '../lib/mcp';
+import { allTools, executeToolCalls, normalizeToolCalls } from '../lib/mcp';
 
 export async function handleChat(request: Request, env: Env): Promise<Response> {
 	if (request.method === 'OPTIONS') {
@@ -70,7 +70,7 @@ async function handleNonStreamingChat(
 			iteration++;
 
 			// Call Workers AI with tools
-			const response = await env.AI.run(model, {
+			const rawResponse = await env.AI.run(model, {
 				messages,
 				tools,
 				max_tokens: req.max_tokens,
@@ -78,6 +78,12 @@ async function handleNonStreamingChat(
 				top_p: req.top_p,
 				stream: false,
 			}) as AiResponse;
+			const response: AiResponse = {
+				response: rawResponse.response,
+				tool_calls: rawResponse.tool_calls
+					? normalizeToolCalls(rawResponse.tool_calls as unknown[])
+					: undefined,
+			};
 
 			// Check if the model wants to call tools
 			if (response.tool_calls && response.tool_calls.length > 0) {
@@ -171,7 +177,7 @@ async function handleStreamingChat(
 					iteration++;
 
 					// Call Workers AI with tools (non-streaming for tool detection)
-					const response = await env.AI.run(model, {
+					const rawResponse = await env.AI.run(model, {
 						messages,
 						tools,
 						max_tokens: req.max_tokens,
@@ -179,6 +185,12 @@ async function handleStreamingChat(
 						top_p: req.top_p,
 						stream: false, // Use non-streaming for tool detection
 					}) as AiResponse;
+					const response: AiResponse = {
+						response: rawResponse.response,
+						tool_calls: rawResponse.tool_calls
+							? normalizeToolCalls(rawResponse.tool_calls as unknown[])
+							: undefined,
+					};
 
 					// Check if the model wants to call tools
 					if (response.tool_calls && response.tool_calls.length > 0) {

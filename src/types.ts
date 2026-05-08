@@ -21,15 +21,12 @@ export interface ToolCall {
 }
 
 export interface ToolDefinition {
-	type: 'function';
-	function: {
-		name: string;
-		description: string;
-		parameters: {
-			type: 'object';
-			properties: Record<string, unknown>;
-			required?: string[];
-		};
+	name: string;
+	description: string;
+	parameters: {
+		type: 'object';
+		properties: Record<string, unknown>;
+		required?: string[];
 	};
 }
 
@@ -85,7 +82,7 @@ export interface TavilySearchResult {
  */
 export interface AiResponse {
 	response?: string;
-	tool_calls?: import('./types').ToolCall[];
+	tool_calls?: ToolCall[];
 }
 
 export interface TavilySearchResponse {

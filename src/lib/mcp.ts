@@ -13,54 +13,45 @@ import { safeJsonParse } from './utils';
 
 export const GITHUB_TOOLS: ToolDefinition[] = [
 	{
-		type: 'function',
-		function: {
-			name: 'github_repo_info',
-			description: 'Get information about a GitHub repository',
-			parameters: {
-				type: 'object',
-				properties: {
-					owner: { type: 'string', description: 'Repository owner (user or org)' },
-					repo: { type: 'string', description: 'Repository name' },
-				},
-				required: ['owner', 'repo'],
+		name: 'github_repo_info',
+		description: 'Get information about a GitHub repository',
+		parameters: {
+			type: 'object',
+			properties: {
+				owner: { type: 'string', description: 'Repository owner (user or org)' },
+				repo: { type: 'string', description: 'Repository name' },
 			},
+			required: ['owner', 'repo'],
 		},
 	},
 	{
-		type: 'function',
-		function: {
-			name: 'github_list_issues',
-			description: 'List open issues in a GitHub repository',
-			parameters: {
-				type: 'object',
-				properties: {
-					owner: { type: 'string' },
-					repo: { type: 'string' },
-					state: { type: 'string', enum: ['open', 'closed', 'all'], default: 'open' },
-					per_page: { type: 'integer', default: 10 },
-				},
-				required: ['owner', 'repo'],
+		name: 'github_list_issues',
+		description: 'List open issues in a GitHub repository',
+		parameters: {
+			type: 'object',
+			properties: {
+				owner: { type: 'string' },
+				repo: { type: 'string' },
+				state: { type: 'string', enum: ['open', 'closed', 'all'], default: 'open' },
+				per_page: { type: 'integer', default: 10 },
 			},
+			required: ['owner', 'repo'],
 		},
 	},
 ];
 
 export const TAVILY_TOOLS: ToolDefinition[] = [
 	{
-		type: 'function',
-		function: {
-			name: 'tavily_search',
-			description: 'Search the web for current information',
-			parameters: {
-				type: 'object',
-				properties: {
-					query: { type: 'string', description: 'Search query' },
-					max_results: { type: 'integer', default: 5 },
-					include_answer: { type: 'boolean', default: true },
-				},
-				required: ['query'],
+		name: 'tavily_search',
+		description: 'Search the web for current information',
+		parameters: {
+			type: 'object',
+			properties: {
+				query: { type: 'string', description: 'Search query' },
+				max_results: { type: 'integer', default: 5 },
+				include_answer: { type: 'boolean', default: true },
 			},
+			required: ['query'],
 		},
 	},
 ];
@@ -68,6 +59,41 @@ export const TAVILY_TOOLS: ToolDefinition[] = [
 /** All available tools */
 export function allTools(): ToolDefinition[] {
 	return [...GITHUB_TOOLS, ...TAVILY_TOOLS];
+}
+
+/**
+ * Workers AI may return tool_calls in flat format { name, arguments } or OpenAI
+ * format { id, type, function: { name, arguments } }. Normalize to ToolCall so
+ * the rest of the code has a single shape to work with.
+ */
+export function normalizeToolCalls(raw: unknown[]): ToolCall[] {
+	return (raw as any[]).map((call, i) => {
+		if (call.type === 'function' && call.function) {
+			return {
+				id: call.id ?? `call_${i}`,
+				type: 'function' as const,
+				function: {
+					name: call.function.name,
+					arguments:
+						typeof call.function.arguments === 'string'
+							? call.function.arguments
+							: JSON.stringify(call.function.arguments ?? {}),
+				},
+			};
+		}
+		// Flat format: { name, arguments }
+		return {
+			id: `call_${i}_${Date.now()}`,
+			type: 'function' as const,
+			function: {
+				name: call.name ?? 'unknown',
+				arguments:
+					typeof call.arguments === 'string'
+						? call.arguments
+						: JSON.stringify(call.arguments ?? {}),
+			},
+		};
+	});
 }
 
 // ------------------------------------------------------------------
@@ -92,9 +118,9 @@ export async function executeToolCalls(
 			results.push(result);
 		} catch (err) {
 			results.push({
-				tool_call_id: call.id,
+				tool_call_id: call.id ?? 'unknown',
 				role: 'tool',
-				content: `Error executing ${call.function.name}: ${(err as Error).message}`,
+				content: `Error executing tool: ${(err as Error).message}`,
 			});
 		}
 	}

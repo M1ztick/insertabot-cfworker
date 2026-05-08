@@ -5,7 +5,7 @@
 
 import type { AiResponse, Message, ChatRequest } from '../types';
 import type { Env } from '../worker-configuration';
-import { allTools, executeToolCalls } from './mcp';
+import { allTools, executeToolCalls, normalizeToolCalls } from './mcp';
 
 export interface ChatAgentState {
 	messages: Message[];
@@ -80,7 +80,7 @@ export class ChatAgent implements DurableObject {
 			while (iteration < maxIterations) {
 				iteration++;
 
-				const response = await this.env.AI.run(model, {
+				const rawResponse = await this.env.AI.run(model, {
 					messages,
 					tools,
 					max_tokens: req.max_tokens,
@@ -88,6 +88,12 @@ export class ChatAgent implements DurableObject {
 					top_p: req.top_p,
 					stream: false,
 				}) as AiResponse;
+				const response: AiResponse = {
+					response: rawResponse.response,
+					tool_calls: rawResponse.tool_calls
+						? normalizeToolCalls(rawResponse.tool_calls as unknown[])
+						: undefined,
+				};
 
 				// Check for tool calls
 				if (response.tool_calls && response.tool_calls.length > 0) {
@@ -230,11 +236,17 @@ export class ChatAgent implements DurableObject {
 				while (iteration < maxIterations) {
 					iteration++;
 
-					const response = await this.env.AI.run(model, {
+					const rawWsResponse = await this.env.AI.run(model, {
 						messages,
 						tools,
 						stream: false,
 					}) as AiResponse;
+					const response: AiResponse = {
+						response: rawWsResponse.response,
+						tool_calls: rawWsResponse.tool_calls
+							? normalizeToolCalls(rawWsResponse.tool_calls as unknown[])
+							: undefined,
+					};
 
 					if (response.tool_calls && response.tool_calls.length > 0) {
 						// Send tool call events
