@@ -2,13 +2,14 @@
  * InsertaBot Cloudflare Worker — Entry Point
  *
  * Routes:
- *   POST /v1/chat/completions    → Chat completions (OpenAI-compatible)
- *   GET  /health                 → Status check
- *   POST /github                 → Direct GitHub MCP actions
- *   POST /tavily                 → Direct Tavily search
- *   *    /                       → Public assets (from ./public)
+ *   /agents/chat-agent/:id  → ChatAgent Durable Object (WebSocket + MCP, handled by agents SDK)
+ *   POST /v1/chat/completions → Simple OpenAI-compatible REST endpoint (no MCP tools)
+ *   GET  /health             → Status check
+ *   POST /github             → Direct GitHub API actions
+ *   POST /tavily             → Direct Tavily search
  */
 
+import { routeAgentRequest } from 'agents';
 import type { Env } from './worker-configuration';
 import { handleChat } from './handlers/chat';
 import { handleHealth } from './handlers/health';
@@ -16,49 +17,35 @@ import { handleGithub } from './handlers/github';
 import { handleTavily } from './handlers/tavily';
 import { corsHeaders } from './lib/utils';
 
-// Importing DO class so Wrangler knows to register it
 export { ChatAgent } from './lib/durable';
 
 export default {
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-		// Cron handler — extend this for periodic tasks (cache refresh, health pings, etc.)
 		console.log(`Scheduled cron fired: ${event.cron} at ${new Date(event.scheduledTime).toISOString()}`);
 	},
 
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 
-		// ---- CORS preflight for all routes ----
 		if (request.method === 'OPTIONS') {
 			return new Response(null, { headers: corsHeaders() });
 		}
 
-		try {
-			// WebSocket upgrade for Agents SDK UI
-			if (url.pathname.startsWith('/agents/chat-agent/')) {
-				const id = url.pathname.split('/').pop();
-				if (!id) return new Response('Bad Request', { status: 400 });
-				
-				const doId = env.ChatAgent.idFromName(id);
-				const agent = env.ChatAgent.get(doId);
-				return agent.fetch(request);
-			}
+		// Agents SDK handles all /agents/* WebSocket + HTTP routing
+		const agentResponse = await routeAgentRequest(request, env);
+		if (agentResponse) return agentResponse;
 
+		try {
 			switch (url.pathname) {
 				case '/v1/chat/completions':
 					return await handleChat(request, env);
-
 				case '/health':
 					return await handleHealth(request, env);
-
 				case '/github':
 					return await handleGithub(request, env);
-
 				case '/tavily':
 					return await handleTavily(request, env);
-
 				default:
-					// Fallback: serve static assets from ./public (handled by wrangler assets)
 					return new Response('Not Found', { status: 404 });
 			}
 		} catch (err) {

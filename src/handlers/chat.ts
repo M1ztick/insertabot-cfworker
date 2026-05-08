@@ -1,13 +1,12 @@
 /**
- * Chat completion handler
- * Supports streaming + non-streaming responses with MCP tool calling.
- * Integrates Durable Objects for conversation history.
+ * OpenAI-compatible REST endpoint — /v1/chat/completions
+ * Simple stateless passthrough to Workers AI. No MCP tools.
+ * For MCP tool access use the WebSocket path (/agents/chat-agent/:id) instead.
  */
 
-import type { AiResponse, ChatRequest, ChatResponseChunk, Message, ToolCall } from '../types';
+import type { ChatRequest, ChatResponseChunk } from '../types';
 import type { Env } from '../worker-configuration';
 import { generateId, jsonResponse, corsHeaders } from '../lib/utils';
-import { allTools, executeToolCalls, normalizeToolCalls } from '../lib/mcp';
 
 export async function handleChat(request: Request, env: Env): Promise<Response> {
 	if (request.method === 'OPTIONS') {
@@ -18,116 +17,38 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
 	}
 
 	const body = (await request.json()) as ChatRequest;
-	const isStreaming = body.stream ?? false;
+	const model = body.model || '@cf/moonshotai/kimi-k2.6';
+	const systemPrompt =
+		env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful AI assistant.';
 
-	// ---- Durable Object routing for conversation state ----
-	// For now, we use a fixed DO ID per request (you may want per-user or per-session IDs).
-	// You can pass `conversationId` in the request body to isolate threads.
-	const conversationId = (body as Record<string, unknown>).conversationId as string | undefined;
-	const doId = env.ChatAgent.idFromName(conversationId ?? 'default');
-	const agent = env.ChatAgent.get(doId);
-
-	// If you want pure stateless (no DO), comment the above and proceed below directly.
-
-	try {
-		if (isStreaming) {
-			return await handleStreamingChat(body, env, agent);
-		}
-		return await handleNonStreamingChat(body, env, agent);
-	} catch (err) {
-		console.error('Chat handler error:', err);
-		return jsonResponse({ error: (err as Error).message }, 500, corsHeaders());
-	}
-}
-
-// ------------------------------------------------------------------
-// Non-streaming path with tool calling
-// ------------------------------------------------------------------
-
-async function handleNonStreamingChat(
-	req: ChatRequest,
-	env: Env,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	_agent: any
-): Promise<Response> {
-	const systemPrompt = env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant with access to real-time web search and GitHub repository information.';
-	const model = req.model || '@cf/moonshotai/kimi-k2.6';
-	const tools = allTools();
-
-	// Prepare messages with system prompt
-	const messages: Message[] = [
-		{ role: 'system', content: systemPrompt },
-		...req.messages,
+	const messages = [
+		{ role: 'system' as const, content: systemPrompt },
+		...body.messages,
 	];
 
 	try {
-		// Tool calling loop - max 5 iterations to prevent infinite loops
-		const maxIterations = 5;
-		let iteration = 0;
-		let finalResponse: any = null;
-
-		while (iteration < maxIterations) {
-			iteration++;
-
-			// Call Workers AI with tools
-			const rawResponse = await env.AI.run(model, {
+		if (body.stream) {
+			const rawStream = (await env.AI.run(model as Parameters<typeof env.AI.run>[0], {
 				messages,
-				tools,
-				max_tokens: req.max_tokens,
-				temperature: req.temperature,
-				top_p: req.top_p,
-				stream: false,
-			}) as AiResponse;
-			const response: AiResponse = {
-				response: rawResponse.response,
-				tool_calls: rawResponse.tool_calls
-					? normalizeToolCalls(rawResponse.tool_calls as unknown[])
-					: undefined,
-			};
+				stream: true,
+				max_tokens: body.max_tokens,
+			})) as unknown as ReadableStream;
 
-			// Check if the model wants to call tools
-			if (response.tool_calls && response.tool_calls.length > 0) {
-				console.log(`Tool calls requested (iteration ${iteration}):`, response.tool_calls);
-
-				// Add assistant message with tool calls to history
-				messages.push({
-					role: 'assistant',
-					content: null,
-					tool_calls: response.tool_calls,
-				});
-
-				// Execute all tool calls
-				const toolResults = await executeToolCalls(response.tool_calls, env);
-
-				// Add tool results to messages
-				for (const result of toolResults) {
-					messages.push({
-						role: 'tool',
-						content: result.content,
-						tool_call_id: result.tool_call_id,
-						name: result.tool_call_id,
-					});
-				}
-
-				// If every tool call failed, stop looping to avoid burning iterations
-				const allFailed = toolResults.every(r => r.content.startsWith('Error executing tool:'));
-				if (allFailed) {
-					finalResponse = { response: toolResults.map(r => r.content).join('\n') };
-					break;
-				}
-
-				// Continue loop to get final response
-				continue;
-			}
-
-			// No tool calls - we have the final response
-			finalResponse = response;
-			break;
+			return new Response(rawStream, {
+				headers: {
+					'Content-Type': 'text/event-stream',
+					'Cache-Control': 'no-cache',
+					Connection: 'keep-alive',
+					...corsHeaders(),
+				},
+			});
 		}
 
-		if (!finalResponse) {
-			throw new Error('Max tool calling iterations reached');
-		}
+		const response = (await env.AI.run(model as Parameters<typeof env.AI.run>[0], {
+			messages,
+			max_tokens: body.max_tokens,
+			temperature: body.temperature,
+		})) as unknown as { response?: string };
 
 		const result: ChatResponseChunk = {
 			id: generateId('chat'),
@@ -137,7 +58,7 @@ async function handleNonStreamingChat(
 			choices: [
 				{
 					index: 0,
-					message: { role: 'assistant', content: finalResponse.response || '' },
+					message: { role: 'assistant', content: response.response ?? '' },
 					finish_reason: 'stop',
 				},
 			],
@@ -145,182 +66,7 @@ async function handleNonStreamingChat(
 
 		return jsonResponse(result, 200, corsHeaders());
 	} catch (err) {
-		console.error('Non-streaming chat error:', err);
+		console.error('Chat handler error:', err);
 		return jsonResponse({ error: (err as Error).message }, 500, corsHeaders());
 	}
-}
-
-// ------------------------------------------------------------------
-// Streaming path with tool calling (SSE)
-// ------------------------------------------------------------------
-
-async function handleStreamingChat(
-	req: ChatRequest,
-	env: Env,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	_agent: any
-): Promise<Response> {
-	const encoder = new TextEncoder();
-	const systemPrompt = env.SYSTEM_PROMPT ?? 'You are InsertaBot, a helpful coding assistant with access to real-time web search and GitHub repository information.';
-	const model = req.model || '@cf/moonshotai/kimi-k2.6';
-	const tools = allTools();
-
-	// Prepare messages with system prompt
-	const messages: Message[] = [
-		{ role: 'system', content: systemPrompt },
-		...req.messages,
-	];
-
-	const stream = new ReadableStream({
-		async start(controller) {
-			const chatId = generateId('chat');
-			const created = Math.floor(Date.now() / 1000);
-
-			try {
-				// Tool calling loop for streaming
-				const maxIterations = 5;
-				let iteration = 0;
-
-				while (iteration < maxIterations) {
-					iteration++;
-
-					// Call Workers AI with tools (non-streaming for tool detection)
-					const rawResponse = await env.AI.run(model, {
-						messages,
-						tools,
-						max_tokens: req.max_tokens,
-						temperature: req.temperature,
-						top_p: req.top_p,
-						stream: false, // Use non-streaming for tool detection
-					}) as AiResponse;
-					const response: AiResponse = {
-						response: rawResponse.response,
-						tool_calls: rawResponse.tool_calls
-							? normalizeToolCalls(rawResponse.tool_calls as unknown[])
-							: undefined,
-					};
-
-					// Check if the model wants to call tools
-					if (response.tool_calls && response.tool_calls.length > 0) {
-						console.log(`Tool calls requested (streaming iteration ${iteration}):`, response.tool_calls);
-
-						// Emit tool call events
-						for (const toolCall of response.tool_calls) {
-							const toolEvent = {
-								type: 'tool_call',
-								tool_name: toolCall.function.name,
-								tool_args: toolCall.function.arguments,
-							};
-							controller.enqueue(encoder.encode(`event: tool_call\ndata: ${JSON.stringify(toolEvent)}\n\n`));
-						}
-
-						// Add assistant message with tool calls
-						messages.push({
-							role: 'assistant',
-							content: null,
-							tool_calls: response.tool_calls,
-						});
-
-						// Execute tool calls
-						const toolResults = await executeToolCalls(response.tool_calls, env);
-
-						// Add tool results and emit events
-						for (const result of toolResults) {
-							messages.push({
-								role: 'tool',
-								content: result.content,
-								tool_call_id: result.tool_call_id,
-								name: result.tool_call_id,
-							});
-
-							const toolResultEvent = {
-								type: 'tool_result',
-								tool_call_id: result.tool_call_id,
-								result: result.content,
-							};
-							controller.enqueue(encoder.encode(`event: tool_result\ndata: ${JSON.stringify(toolResultEvent)}\n\n`));
-						}
-
-						// If every tool call failed, bail out
-						const allFailed = toolResults.every(r => r.content.startsWith('Error executing tool:'));
-						if (allFailed) break;
-
-						// Continue loop
-						continue;
-					}
-
-					// No tool calls - stream the final response
-					const finalResponse = await env.AI.run(model, {
-						messages,
-						max_tokens: req.max_tokens,
-						temperature: req.temperature,
-						top_p: req.top_p,
-						stream: true,
-					}) as unknown as AsyncIterable<{ response?: string }>;
-
-					// Stream the response
-					if (finalResponse && typeof (finalResponse as any)[Symbol.asyncIterator] === 'function') {
-						for await (const chunk of finalResponse) {
-							if (chunk.response) {
-								const event: ChatResponseChunk = {
-									id: chatId,
-									object: 'chat.completion.chunk',
-									created,
-									model,
-									choices: [
-										{
-											index: 0,
-											delta: { content: chunk.response },
-											finish_reason: null,
-										},
-									],
-								};
-								controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-							}
-						}
-					}
-
-					// Done - exit loop
-					break;
-				}
-
-				// Final chunk with finish reason
-				const finalChunk: ChatResponseChunk = {
-					id: chatId,
-					object: 'chat.completion.chunk',
-					created,
-					model,
-					choices: [
-						{
-							index: 0,
-							delta: {},
-							finish_reason: 'stop',
-						},
-					],
-				};
-				controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`));
-				controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-			} catch (err) {
-				console.error('Streaming error:', err);
-				const errorEvent = {
-					error: {
-						message: (err as Error).message,
-						type: 'server_error',
-					},
-				};
-				controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorEvent)}\n\n`));
-			} finally {
-				controller.close();
-			}
-		},
-	});
-
-	return new Response(stream, {
-		headers: {
-			'Content-Type': 'text/event-stream',
-			'Cache-Control': 'no-cache',
-			Connection: 'keep-alive',
-			...corsHeaders(),
-		},
-	});
 }

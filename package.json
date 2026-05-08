@@ -15,5 +15,12 @@
     "esbuild": "^0.25.0",
     "typescript": "^5.8.0",
     "wrangler": "^4.84.1"
+  },
+  "dependencies": {
+    "@cloudflare/ai-chat": "^0.6.2",
+    "agents": "^0.12.3",
+    "ai": "^6.0.176",
+    "workers-ai-provider": "^3.1.14",
+    "zod": "^4.4.3"
   }
 }
