@@ -40,7 +40,7 @@ export class ChatAgent extends AIChatAgent<Env> {
 			system:
 				this.env.SYSTEM_PROMPT ??
 				'You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.',
-			messages: convertToModelMessages(this.messages),
+			messages: await convertToModelMessages(this.messages),
 			tools,
 			onFinish,
 		});
