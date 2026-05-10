@@ -33,8 +33,36 @@ export class ChatAgent extends AIChatAgent<Env> {
 		onFinish: StreamTextOnFinishCallback<ToolSet>
 	): Promise<Response | undefined> {
 		const workersai = createWorkersAI({ binding: this.env.AI });
-		const tools = this.mcp.getAITools();
-		const hasTools = Object.keys(tools).length > 0;
+		const rawTools = this.mcp.getAITools();
+		const hasTools = Object.keys(rawTools).length > 0;
+
+		// Wrap each tool's execute to truncate large results before they hit the model.
+		// GitHub "list repositories" and similar broad queries can return 500 KB+,
+		// which overflows Kimi K2.6's context and causes a silent fail.
+		const TOOL_RESULT_LIMIT = 12_000; // ~3 k tokens
+		const tools: ToolSet = hasTools
+			? Object.fromEntries(
+					Object.entries(rawTools).map(([name, tool]) => {
+						if (!tool.execute) return [name, tool];
+						return [
+							name,
+							{
+								...tool,
+								execute: async (args: unknown, opts: unknown) => {
+									// biome-ignore lint: dynamic MCP tool signature
+									const result = await (tool.execute as Function)(args, opts);
+									const text = JSON.stringify(result);
+									if (text.length <= TOOL_RESULT_LIMIT) return result;
+									return (
+										text.slice(0, TOOL_RESULT_LIMIT) +
+										'\n…[truncated — response too large for model context]'
+									);
+								},
+							},
+						];
+					})
+			  )
+			: {};
 
 		const result = streamText({
 			model: workersai('@cf/moonshotai/kimi-k2.6'),
