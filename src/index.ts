@@ -46,6 +46,8 @@ export default {
 					return await handleGithub(request, env);
 				case '/tavily':
 					return await handleTavily(request, env);
+				case '/favicon.ico':
+					return new Response(null, { status: 204 });
 				default:
 					return new Response('Not Found', { status: 404 });
 			}

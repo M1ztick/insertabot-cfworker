@@ -34,6 +34,7 @@ export class ChatAgent extends AIChatAgent<Env> {
 	): Promise<Response | undefined> {
 		const workersai = createWorkersAI({ binding: this.env.AI });
 		const tools = this.mcp.getAITools();
+		const hasTools = Object.keys(tools).length > 0;
 
 		const result = streamText({
 			model: workersai('@cf/moonshotai/kimi-k2.6'),
@@ -41,7 +42,7 @@ export class ChatAgent extends AIChatAgent<Env> {
 				this.env.SYSTEM_PROMPT ??
 				'You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.',
 			messages: await convertToModelMessages(this.messages),
-			tools,
+			...(hasTools ? { tools, maxSteps: 5 } : {}),
 			onFinish,
 		});
 
