@@ -21,7 +21,8 @@ export { ChatAgent } from './lib/durable';
 
 export default {
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-		console.log(`Scheduled cron fired: ${event.cron} at ${new Date(event.scheduledTime).toISOString()}`);
+		const safeCron = event.cron.replace(/[\r\n]/g, '');
+		console.log(`Scheduled cron fired: ${safeCron} at ${new Date(event.scheduledTime).toISOString()}`);
 	},
 
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

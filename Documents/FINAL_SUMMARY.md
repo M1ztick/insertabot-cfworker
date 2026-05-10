@@ -249,9 +249,9 @@ You'll see:
 wrangler secret list
 ```
 
-Should show:
-- `TAVILY_API_KEY`
-- `GITHUB_TOKEN`
+Should show the following secret names (not values) configured via `wrangler secret put`:
+- `TAVILY_API_KEY` — set to your Tavily API key
+- `GITHUB_TOKEN` — set to your GitHub personal access token
 - `SYSTEM_PROMPT` (optional)
 
 ## Next Steps (Optional Enhancements)

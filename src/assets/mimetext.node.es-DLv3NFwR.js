@@ -7185,7 +7185,7 @@ var require_mime_types = /* @__PURE__ */ __commonJSMin(((exports) => {
 //#endregion
 //#region node_modules/core-js-pure/internals/fails.js
 var require_fails = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	module.exports = function(exec) {
+	module.exports = function (exec) {
 		try {
 			return !!exec();
 		} catch (error) {
@@ -7196,8 +7196,8 @@ var require_fails = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 //#endregion
 //#region node_modules/core-js-pure/internals/function-bind-native.js
 var require_function_bind_native = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	module.exports = !require_fails()(function() {
-		var test = function() {}.bind();
+	module.exports = !require_fails()(function () {
+		var test = function () { }.bind();
 		return typeof test != "function" || test.hasOwnProperty("prototype");
 	});
 }));
@@ -7208,8 +7208,8 @@ var require_function_uncurry_this = /* @__PURE__ */ __commonJSMin(((exports, mod
 	var FunctionPrototype = Function.prototype;
 	var call = FunctionPrototype.call;
 	var uncurryThisWithBind = NATIVE_BIND && FunctionPrototype.bind.bind(call, call);
-	module.exports = NATIVE_BIND ? uncurryThisWithBind : function(fn) {
-		return function() {
+	module.exports = NATIVE_BIND ? uncurryThisWithBind : function (fn) {
+		return function () {
 			return call.apply(fn, arguments);
 		};
 	};
@@ -7222,10 +7222,10 @@ var require_object_is_prototype_of = /* @__PURE__ */ __commonJSMin(((exports, mo
 //#endregion
 //#region node_modules/core-js-pure/internals/global-this.js
 var require_global_this = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var check = function(it) {
+	var check = function (it) {
 		return it && it.Math === Math && it;
 	};
-	module.exports = check(typeof globalThis == "object" && globalThis) || check(typeof window == "object" && window) || check(typeof self == "object" && self) || check(typeof global == "object" && global) || check(typeof exports == "object" && exports) || (function() {
+	module.exports = check(typeof globalThis == "object" && globalThis) || check(typeof window == "object" && window) || check(typeof self == "object" && self) || check(typeof global == "object" && global) || check(typeof exports == "object" && exports) || (function () {
 		return this;
 	})() || Function("return this")();
 }));
@@ -7236,7 +7236,7 @@ var require_function_apply = /* @__PURE__ */ __commonJSMin(((exports, module) =>
 	var FunctionPrototype = Function.prototype;
 	var apply = FunctionPrototype.apply;
 	var call = FunctionPrototype.call;
-	module.exports = typeof Reflect == "object" && Reflect.apply || (NATIVE_BIND ? call.bind(apply) : function() {
+	module.exports = typeof Reflect == "object" && Reflect.apply || (NATIVE_BIND ? call.bind(apply) : function () {
 		return call.apply(apply, arguments);
 	});
 }));
@@ -7246,7 +7246,7 @@ var require_classof_raw = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var uncurryThis = require_function_uncurry_this();
 	var toString = uncurryThis({}.toString);
 	var stringSlice = uncurryThis("".slice);
-	module.exports = function(it) {
+	module.exports = function (it) {
 		return stringSlice(toString(it), 8, -1);
 	};
 }));
@@ -7255,7 +7255,7 @@ var require_classof_raw = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 var require_function_uncurry_this_clause = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var classofRaw = require_classof_raw();
 	var uncurryThis = require_function_uncurry_this();
-	module.exports = function(fn) {
+	module.exports = function (fn) {
 		if (classofRaw(fn) === "Function") return uncurryThis(fn);
 	};
 }));
@@ -7263,19 +7263,21 @@ var require_function_uncurry_this_clause = /* @__PURE__ */ __commonJSMin(((expor
 //#region node_modules/core-js-pure/internals/is-callable.js
 var require_is_callable = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var documentAll = typeof document == "object" && document.all;
-	module.exports = typeof documentAll == "undefined" && documentAll !== void 0 ? function(argument) {
+	module.exports = typeof documentAll == "undefined" && documentAll !== void 0 ? function (argument) {
 		return typeof argument == "function" || argument === documentAll;
-	} : function(argument) {
+	} : function (argument) {
 		return typeof argument == "function";
 	};
 }));
 //#endregion
 //#region node_modules/core-js-pure/internals/descriptors.js
 var require_descriptors = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	module.exports = !require_fails()(function() {
-		return Object.defineProperty({}, 1, { get: function() {
-			return 7;
-		} })[1] !== 7;
+	module.exports = !require_fails()(function () {
+		return Object.defineProperty({}, 1, {
+			get: function () {
+				return 7;
+			}
+		})[1] !== 7;
 	});
 }));
 //#endregion
@@ -7283,7 +7285,7 @@ var require_descriptors = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 var require_function_call = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var NATIVE_BIND = require_function_bind_native();
 	var call = Function.prototype.call;
-	module.exports = NATIVE_BIND ? call.bind(call) : function() {
+	module.exports = NATIVE_BIND ? call.bind(call) : function () {
 		return call.apply(call, arguments);
 	};
 }));
@@ -7300,7 +7302,7 @@ var require_object_property_is_enumerable = /* @__PURE__ */ __commonJSMin(((expo
 //#endregion
 //#region node_modules/core-js-pure/internals/create-property-descriptor.js
 var require_create_property_descriptor = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	module.exports = function(bitmap, value) {
+	module.exports = function (bitmap, value) {
 		return {
 			enumerable: !(bitmap & 1),
 			configurable: !(bitmap & 2),
@@ -7317,16 +7319,16 @@ var require_indexed_object = /* @__PURE__ */ __commonJSMin(((exports, module) =>
 	var classof = require_classof_raw();
 	var $Object = Object;
 	var split = uncurryThis("".split);
-	module.exports = fails(function() {
+	module.exports = fails(function () {
 		return !$Object("z").propertyIsEnumerable(0);
-	}) ? function(it) {
+	}) ? function (it) {
 		return classof(it) === "String" ? split(it, "") : $Object(it);
 	} : $Object;
 }));
 //#endregion
 //#region node_modules/core-js-pure/internals/is-null-or-undefined.js
 var require_is_null_or_undefined = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	module.exports = function(it) {
+	module.exports = function (it) {
 		return it === null || it === void 0;
 	};
 }));
@@ -7335,7 +7337,7 @@ var require_is_null_or_undefined = /* @__PURE__ */ __commonJSMin(((exports, modu
 var require_require_object_coercible = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var isNullOrUndefined = require_is_null_or_undefined();
 	var $TypeError = TypeError;
-	module.exports = function(it) {
+	module.exports = function (it) {
 		if (isNullOrUndefined(it)) throw new $TypeError("Can't call method on " + it);
 		return it;
 	};
@@ -7345,7 +7347,7 @@ var require_require_object_coercible = /* @__PURE__ */ __commonJSMin(((exports, 
 var require_to_indexed_object = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var IndexedObject = require_indexed_object();
 	var requireObjectCoercible = require_require_object_coercible();
-	module.exports = function(it) {
+	module.exports = function (it) {
 		return IndexedObject(requireObjectCoercible(it));
 	};
 }));
@@ -7353,7 +7355,7 @@ var require_to_indexed_object = /* @__PURE__ */ __commonJSMin(((exports, module)
 //#region node_modules/core-js-pure/internals/is-object.js
 var require_is_object = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var isCallable = require_is_callable();
-	module.exports = function(it) {
+	module.exports = function (it) {
 		return typeof it == "object" ? it !== null : isCallable(it);
 	};
 }));
@@ -7368,10 +7370,10 @@ var require_get_built_in = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var path = require_path();
 	var globalThis = require_global_this();
 	var isCallable = require_is_callable();
-	var aFunction = function(variable) {
+	var aFunction = function (variable) {
 		return isCallable(variable) ? variable : void 0;
 	};
-	module.exports = function(namespace, method) {
+	module.exports = function (namespace, method) {
 		return arguments.length < 2 ? aFunction(path[namespace]) || aFunction(globalThis[namespace]) : path[namespace] && path[namespace][method] || globalThis[namespace] && globalThis[namespace][method];
 	};
 }));
@@ -7411,8 +7413,9 @@ var require_symbol_constructor_detection = /* @__PURE__ */ __commonJSMin(((expor
 	var V8_VERSION = require_environment_v8_version();
 	var fails = require_fails();
 	var $String = require_global_this().String;
-	module.exports = !!Object.getOwnPropertySymbols && !fails(function() {
+	module.exports = !!Object.getOwnPropertySymbols && !fails(function () {
 		var symbol = Symbol("symbol detection");
+		// amazonq-ignore-next-line
 		return !$String(symbol) || !(Object(symbol) instanceof Symbol) || !Symbol.sham && V8_VERSION && V8_VERSION < 41;
 	});
 }));
@@ -7429,9 +7432,9 @@ var require_is_symbol = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var isPrototypeOf = require_object_is_prototype_of();
 	var USE_SYMBOL_AS_UID = require_use_symbol_as_uid();
 	var $Object = Object;
-	module.exports = USE_SYMBOL_AS_UID ? function(it) {
+	module.exports = USE_SYMBOL_AS_UID ? function (it) {
 		return typeof it == "symbol";
-	} : function(it) {
+	} : function (it) {
 		var $Symbol = getBuiltIn("Symbol");
 		return isCallable($Symbol) && isPrototypeOf($Symbol.prototype, $Object(it));
 	};
@@ -7440,7 +7443,7 @@ var require_is_symbol = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 //#region node_modules/core-js-pure/internals/try-to-string.js
 var require_try_to_string = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var $String = String;
-	module.exports = function(argument) {
+	module.exports = function (argument) {
 		try {
 			return $String(argument);
 		} catch (error) {
@@ -7454,7 +7457,7 @@ var require_a_callable = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var isCallable = require_is_callable();
 	var tryToString = require_try_to_string();
 	var $TypeError = TypeError;
-	module.exports = function(argument) {
+	module.exports = function (argument) {
 		if (isCallable(argument)) return argument;
 		throw new $TypeError(tryToString(argument) + " is not a function");
 	};
@@ -7464,7 +7467,7 @@ var require_a_callable = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 var require_get_method = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var aCallable = require_a_callable();
 	var isNullOrUndefined = require_is_null_or_undefined();
-	module.exports = function(V, P) {
+	module.exports = function (V, P) {
 		var func = V[P];
 		return isNullOrUndefined(func) ? void 0 : aCallable(func);
 	};
@@ -7476,7 +7479,7 @@ var require_ordinary_to_primitive = /* @__PURE__ */ __commonJSMin(((exports, mod
 	var isCallable = require_is_callable();
 	var isObject = require_is_object();
 	var $TypeError = TypeError;
-	module.exports = function(input, pref) {
+	module.exports = function (input, pref) {
 		var fn, val;
 		if (pref === "string" && isCallable(fn = input.toString) && !isObject(val = call(fn, input))) return val;
 		if (isCallable(fn = input.valueOf) && !isObject(val = call(fn, input))) return val;
@@ -7494,7 +7497,7 @@ var require_is_pure = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 var require_define_global_property = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var globalThis = require_global_this();
 	var defineProperty = Object.defineProperty;
-	module.exports = function(key, value) {
+	module.exports = function (key, value) {
 		try {
 			defineProperty(globalThis, key, {
 				value,
@@ -7527,7 +7530,7 @@ var require_shared_store = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 //#region node_modules/core-js-pure/internals/shared.js
 var require_shared = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var store = require_shared_store();
-	module.exports = function(key, value) {
+	module.exports = function (key, value) {
 		return store[key] || (store[key] = value || {});
 	};
 }));
@@ -7536,7 +7539,7 @@ var require_shared = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 var require_to_object = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var requireObjectCoercible = require_require_object_coercible();
 	var $Object = Object;
-	module.exports = function(argument) {
+	module.exports = function (argument) {
 		return $Object(requireObjectCoercible(argument));
 	};
 }));
@@ -7557,7 +7560,7 @@ var require_uid = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var id = 0;
 	var postfix = Math.random();
 	var toString = uncurryThis(1.1.toString);
-	module.exports = function(key) {
+	module.exports = function (key) {
 		return "Symbol(" + (key === void 0 ? "" : key) + ")_" + toString(++id + postfix, 36);
 	};
 }));
@@ -7573,7 +7576,7 @@ var require_well_known_symbol = /* @__PURE__ */ __commonJSMin(((exports, module)
 	var Symbol = globalThis.Symbol;
 	var WellKnownSymbolsStore = shared("wks");
 	var createWellKnownSymbol = USE_SYMBOL_AS_UID ? Symbol["for"] || Symbol : Symbol && Symbol.withoutSetter || uid;
-	module.exports = function(name) {
+	module.exports = function (name) {
 		if (!hasOwn(WellKnownSymbolsStore, name)) WellKnownSymbolsStore[name] = NATIVE_SYMBOL && hasOwn(Symbol, name) ? Symbol[name] : createWellKnownSymbol("Symbol." + name);
 		return WellKnownSymbolsStore[name];
 	};
@@ -7589,7 +7592,7 @@ var require_to_primitive = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var wellKnownSymbol = require_well_known_symbol();
 	var $TypeError = TypeError;
 	var TO_PRIMITIVE = wellKnownSymbol("toPrimitive");
-	module.exports = function(input, pref) {
+	module.exports = function (input, pref) {
 		if (!isObject(input) || isSymbol(input)) return input;
 		var exoticToPrim = getMethod(input, TO_PRIMITIVE);
 		var result;
@@ -7608,7 +7611,7 @@ var require_to_primitive = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 var require_to_property_key = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var toPrimitive = require_to_primitive();
 	var isSymbol = require_is_symbol();
-	module.exports = function(argument) {
+	module.exports = function (argument) {
 		var key = toPrimitive(argument, "string");
 		return isSymbol(key) ? key : key + "";
 	};
@@ -7620,7 +7623,7 @@ var require_document_create_element = /* @__PURE__ */ __commonJSMin(((exports, m
 	var isObject = require_is_object();
 	var document = globalThis.document;
 	var EXISTS = isObject(document) && isObject(document.createElement);
-	module.exports = function(it) {
+	module.exports = function (it) {
 		return EXISTS ? document.createElement(it) : {};
 	};
 }));
@@ -7630,10 +7633,12 @@ var require_ie8_dom_define = /* @__PURE__ */ __commonJSMin(((exports, module) =>
 	var DESCRIPTORS = require_descriptors();
 	var fails = require_fails();
 	var createElement = require_document_create_element();
-	module.exports = !DESCRIPTORS && !fails(function() {
-		return Object.defineProperty(createElement("div"), "a", { get: function() {
-			return 7;
-		} }).a !== 7;
+	module.exports = !DESCRIPTORS && !fails(function () {
+		return Object.defineProperty(createElement("div"), "a", {
+			get: function () {
+				return 7;
+			}
+		}).a !== 7;
 	});
 }));
 //#endregion
@@ -7653,7 +7658,7 @@ var require_object_get_own_property_descriptor = /* @__PURE__ */ __commonJSMin((
 		P = toPropertyKey(P);
 		if (IE8_DOM_DEFINE) try {
 			return $getOwnPropertyDescriptor(O, P);
-		} catch (error) {}
+		} catch (error) { }
 		if (hasOwn(O, P)) return createPropertyDescriptor(!call(propertyIsEnumerableModule.f, O, P), O[P]);
 	};
 }));
@@ -7663,11 +7668,11 @@ var require_is_forced = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var fails = require_fails();
 	var isCallable = require_is_callable();
 	var replacement = /#|\.prototype\./;
-	var isForced = function(feature, detection) {
+	var isForced = function (feature, detection) {
 		var value = data[normalize(feature)];
 		return value === POLYFILL ? true : value === NATIVE ? false : isCallable(detection) ? fails(detection) : !!detection;
 	};
-	var normalize = isForced.normalize = function(string) {
+	var normalize = isForced.normalize = function (string) {
 		return String(string).replace(replacement, ".").toLowerCase();
 	};
 	var data = isForced.data = {};
@@ -7682,9 +7687,9 @@ var require_function_bind_context = /* @__PURE__ */ __commonJSMin(((exports, mod
 	var aCallable = require_a_callable();
 	var NATIVE_BIND = require_function_bind_native();
 	var bind = uncurryThis(uncurryThis.bind);
-	module.exports = function(fn, that) {
+	module.exports = function (fn, that) {
 		aCallable(fn);
-		return that === void 0 ? fn : NATIVE_BIND ? bind(fn, that) : function() {
+		return that === void 0 ? fn : NATIVE_BIND ? bind(fn, that) : function () {
 			return fn.apply(that, arguments);
 		};
 	};
@@ -7694,8 +7699,8 @@ var require_function_bind_context = /* @__PURE__ */ __commonJSMin(((exports, mod
 var require_v8_prototype_define_bug = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var DESCRIPTORS = require_descriptors();
 	var fails = require_fails();
-	module.exports = DESCRIPTORS && fails(function() {
-		return Object.defineProperty(function() {}, "prototype", {
+	module.exports = DESCRIPTORS && fails(function () {
+		return Object.defineProperty(function () { }, "prototype", {
 			value: 42,
 			writable: false
 		}).prototype !== 42;
@@ -7707,7 +7712,7 @@ var require_an_object = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var isObject = require_is_object();
 	var $String = String;
 	var $TypeError = TypeError;
-	module.exports = function(argument) {
+	module.exports = function (argument) {
 		if (isObject(argument)) return argument;
 		throw new $TypeError($String(argument) + " is not an object");
 	};
@@ -7748,7 +7753,7 @@ var require_object_define_property = /* @__PURE__ */ __commonJSMin(((exports) =>
 		anObject(Attributes);
 		if (IE8_DOM_DEFINE) try {
 			return $defineProperty(O, P, Attributes);
-		} catch (error) {}
+		} catch (error) { }
 		if ("get" in Attributes || "set" in Attributes) throw new $TypeError("Accessors not supported");
 		if ("value" in Attributes) O[P] = Attributes.value;
 		return O;
@@ -7760,9 +7765,9 @@ var require_create_non_enumerable_property = /* @__PURE__ */ __commonJSMin(((exp
 	var DESCRIPTORS = require_descriptors();
 	var definePropertyModule = require_object_define_property();
 	var createPropertyDescriptor = require_create_property_descriptor();
-	module.exports = DESCRIPTORS ? function(object, key, value) {
+	module.exports = DESCRIPTORS ? function (object, key, value) {
 		return definePropertyModule.f(object, key, createPropertyDescriptor(1, value));
-	} : function(object, key, value) {
+	} : function (object, key, value) {
 		object[key] = value;
 		return object;
 	};
@@ -7781,8 +7786,8 @@ var require_export = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var createNonEnumerableProperty = require_create_non_enumerable_property();
 	var hasOwn = require_has_own_property();
 	require_shared_store();
-	var wrapConstructor = function(NativeConstructor) {
-		var Wrapper = function(a, b, c) {
+	var wrapConstructor = function (NativeConstructor) {
+		var Wrapper = function (a, b, c) {
 			if (this instanceof Wrapper) {
 				switch (arguments.length) {
 					case 0: return new NativeConstructor();
@@ -7796,7 +7801,7 @@ var require_export = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		Wrapper.prototype = NativeConstructor.prototype;
 		return Wrapper;
 	};
-	module.exports = function(options, source) {
+	module.exports = function (options, source) {
 		var TARGET = options.target;
 		var GLOBAL = options.global;
 		var STATIC = options.stat;
@@ -7847,15 +7852,15 @@ var require_classof = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var classofRaw = require_classof_raw();
 	var TO_STRING_TAG = require_well_known_symbol()("toStringTag");
 	var $Object = Object;
-	var CORRECT_ARGUMENTS = classofRaw(function() {
+	var CORRECT_ARGUMENTS = classofRaw(function () {
 		return arguments;
 	}()) === "Arguments";
-	var tryGet = function(it, key) {
+	var tryGet = function (it, key) {
 		try {
 			return it[key];
-		} catch (error) {}
+		} catch (error) { }
 	};
-	module.exports = TO_STRING_TAG_SUPPORT ? classofRaw : function(it) {
+	module.exports = TO_STRING_TAG_SUPPORT ? classofRaw : function (it) {
 		var O, tag, result;
 		return it === void 0 ? "Undefined" : it === null ? "Null" : typeof (tag = tryGet(O = $Object(it), TO_STRING_TAG)) == "string" ? tag : CORRECT_ARGUMENTS ? classofRaw(O) : (result = classofRaw(O)) === "Object" && isCallable(O.callee) ? "Arguments" : result;
 	};
@@ -7865,7 +7870,7 @@ var require_classof = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 var require_to_string = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var classof = require_classof();
 	var $String = String;
-	module.exports = function(argument) {
+	module.exports = function (argument) {
 		if (classof(argument) === "Symbol") throw new TypeError("Cannot convert a Symbol value to a string");
 		return $String(argument);
 	};
@@ -7885,8 +7890,8 @@ var require_string_trim = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var replace = uncurryThis("".replace);
 	var ltrim = RegExp("^[" + whitespaces + "]+");
 	var rtrim = RegExp("(^|[^" + whitespaces + "])[" + whitespaces + "]+$");
-	var createMethod = function(TYPE) {
-		return function($this) {
+	var createMethod = function (TYPE) {
+		return function ($this) {
 			var string = toString(requireObjectCoercible($this));
 			if (TYPE & 1) string = replace(string, ltrim, "");
 			if (TYPE & 2) string = replace(string, rtrim, "$1");
@@ -7909,7 +7914,7 @@ var require_function_name = /* @__PURE__ */ __commonJSMin(((exports, module) => 
 	var EXISTS = hasOwn(FunctionPrototype, "name");
 	module.exports = {
 		EXISTS,
-		PROPER: EXISTS && function something() {}.name === "something",
+		PROPER: EXISTS && function something() { }.name === "something",
 		CONFIGURABLE: EXISTS && (!DESCRIPTORS || DESCRIPTORS && getDescriptor(FunctionPrototype, "name").configurable)
 	};
 }));
@@ -7920,8 +7925,8 @@ var require_string_trim_forced = /* @__PURE__ */ __commonJSMin(((exports, module
 	var fails = require_fails();
 	var whitespaces = require_whitespaces();
 	var non = "​᠎";
-	module.exports = function(METHOD_NAME) {
-		return fails(function() {
+	module.exports = function (METHOD_NAME) {
+		return fails(function () {
 			return !!whitespaces[METHOD_NAME]() || non[METHOD_NAME]() !== non || PROPER_FUNCTION_NAME && whitespaces[METHOD_NAME].name !== METHOD_NAME;
 		});
 	};
@@ -7935,16 +7940,18 @@ var require_es_string_trim = /* @__PURE__ */ __commonJSMin((() => {
 		target: "String",
 		proto: true,
 		forced: require_string_trim_forced()("trim")
-	}, { trim: function trim() {
-		return $trim(this);
-	} });
+	}, {
+		trim: function trim() {
+			return $trim(this);
+		}
+	});
 }));
 //#endregion
 //#region node_modules/core-js-pure/internals/get-built-in-prototype-method.js
 var require_get_built_in_prototype_method = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var globalThis = require_global_this();
 	var path = require_path();
-	module.exports = function(CONSTRUCTOR, METHOD) {
+	module.exports = function (CONSTRUCTOR, METHOD) {
 		var Namespace = path[CONSTRUCTOR + "Prototype"];
 		var pureMethod = Namespace && Namespace[METHOD];
 		if (pureMethod) return pureMethod;
@@ -7965,7 +7972,7 @@ var require_trim$5 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var isPrototypeOf = require_object_is_prototype_of();
 	var method = require_trim$6();
 	var StringPrototype = String.prototype;
-	module.exports = function(it) {
+	module.exports = function (it) {
 		var own = it.trim;
 		return typeof it == "string" || it === StringPrototype || isPrototypeOf(StringPrototype, it) && own === StringPrototype.trim ? method : own;
 	};
@@ -8383,10 +8390,10 @@ var d = class {
 	}
 };
 var h = {
-	toBase64: function(e) {
+	toBase64: function (e) {
 		return Buffer.from(e).toString("base64");
 	},
-	toBase64WebSafe: function(e) {
+	toBase64WebSafe: function (e) {
 		return Buffer.from(e).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 	},
 	eol: EOL,
