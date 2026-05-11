@@ -1,6 +1,7 @@
-import { AIChatAgent, callable, createWorkersAI, MCPConnectionState } from 'agents';
-import { streamText } from 'ai';
-import { convertToModelMessages } from 'agents';
+import { AIChatAgent } from '@cloudflare/ai-chat';
+import { callable, MCPConnectionState } from 'agents';
+import { streamText, convertToModelMessages } from 'ai';
+import { createWorkersAI } from 'workers-ai-provider';
 import type { Env } from '../index';
 
 const TOOL_RESULT_LIMIT = 12_000;
