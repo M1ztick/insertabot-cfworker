@@ -1,13 +1,11 @@
-import { AIChatAgent, callable } from 'agents';
+import { AIChatAgent } from '@cloudflare/ai-chat';
+import { callable } from 'agents';
 import { streamText, convertToModelMessages, stepCountIs } from 'ai';
 import { createWorkersAI } from 'workers-ai-provider';
 import type { Env } from '../index';
 
 const TOOL_RESULT_LIMIT = 12_000;
-
-// Use a Workers AI model slug that actually exists in your account/catalog.
-const DEFAULT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
-
+const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.6';
 const DEFAULT_SYSTEM_PROMPT =
   'You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.';
 
@@ -17,14 +15,11 @@ function truncateToolResult(result: unknown): unknown {
       ? result
       : `${result.slice(0, TOOL_RESULT_LIMIT)}\n…[truncated — response too large for model context]`;
   }
-
   try {
     const text = JSON.stringify(result);
-
     if (text.length <= TOOL_RESULT_LIMIT) {
       return result;
     }
-
     return {
       truncated: true,
       preview: text.slice(0, TOOL_RESULT_LIMIT),
@@ -32,7 +27,6 @@ function truncateToolResult(result: unknown): unknown {
     };
   } catch {
     const text = String(result);
-
     return text.length <= TOOL_RESULT_LIMIT
       ? text
       : `${text.slice(0, TOOL_RESULT_LIMIT)}\n…[truncated — response too large for model context]`;
@@ -50,9 +44,9 @@ export class ChatAgent extends AIChatAgent<Env> {
   @callable()
   async addServer(name: string, url: string, token?: string): Promise<void> {
     const existing = this.mcp.listServers().find((s) => s.name === name);
-
     if (existing) {
-      if (existing.state === 'failed') {
+      const conn = this.mcp.mcpConnections[existing.id];
+      if (conn?.connectionState === 'failed') {
         console.log(`[MCP] Clearing stale FAILED connection for "${name}" before retrying`);
         await this.removeMcpServer(existing.id);
       } else {
@@ -60,13 +54,11 @@ export class ChatAgent extends AIChatAgent<Env> {
         return;
       }
     }
-
     await this.addMcpServer(name, url, {
       ...(token
         ? { transport: { headers: { Authorization: `Bearer ${token}` } } }
         : {}),
     });
-
     console.log(`[MCP] Connected to "${name}" at ${url}`);
   }
 
@@ -76,12 +68,10 @@ export class ChatAgent extends AIChatAgent<Env> {
   @callable()
   async removeServer(name: string): Promise<void> {
     const server = this.mcp.listServers().find((s) => s.name === name);
-
     if (!server) {
       console.warn(`[MCP] removeServer: no server named "${name}" found`);
       return;
     }
-
     await this.removeMcpServer(server.id);
     console.log(`[MCP] Disconnected "${name}"`);
   }
@@ -103,7 +93,6 @@ export class ChatAgent extends AIChatAgent<Env> {
             if (typeof tool?.execute !== 'function') {
               return [toolName, tool];
             }
-
             return [
               toolName,
               {
@@ -121,7 +110,7 @@ export class ChatAgent extends AIChatAgent<Env> {
     const result = streamText({
       model: workersai(DEFAULT_MODEL),
       system: this.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
-      messages: convertToModelMessages(this.messages),
+      messages: await convertToModelMessages(this.messages),
       ...(hasTools ? { tools, stopWhen: stepCountIs(5) } : {}),
       onFinish,
     });
