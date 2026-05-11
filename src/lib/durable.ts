@@ -1,41 +1,62 @@
-import { AIChatAgent } from '@cloudflare/ai-chat';
-import { callable, MCPConnectionState } from 'agents';
-import { streamText, convertToModelMessages } from 'ai';
+import { AIChatAgent, callable } from 'agents';
+import { streamText, convertToModelMessages, stepCountIs } from 'ai';
 import { createWorkersAI } from 'workers-ai-provider';
 import type { Env } from '../index';
 
 const TOOL_RESULT_LIMIT = 12_000;
-const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.6';
+
+// Use a Workers AI model slug that actually exists in your account/catalog.
+const DEFAULT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+
 const DEFAULT_SYSTEM_PROMPT =
   'You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.';
 
+function truncateToolResult(result: unknown): unknown {
+  if (typeof result === 'string') {
+    return result.length <= TOOL_RESULT_LIMIT
+      ? result
+      : `${result.slice(0, TOOL_RESULT_LIMIT)}\n…[truncated — response too large for model context]`;
+  }
+
+  try {
+    const text = JSON.stringify(result);
+
+    if (text.length <= TOOL_RESULT_LIMIT) {
+      return result;
+    }
+
+    return {
+      truncated: true,
+      preview: text.slice(0, TOOL_RESULT_LIMIT),
+      message: 'Tool result truncated — response too large for model context',
+    };
+  } catch {
+    const text = String(result);
+
+    return text.length <= TOOL_RESULT_LIMIT
+      ? text
+      : `${text.slice(0, TOOL_RESULT_LIMIT)}\n…[truncated — response too large for model context]`;
+  }
+}
+
 export class ChatAgent extends AIChatAgent<Env> {
   /**
-   * Wait up to 8s for MCP connections to settle after hibernation.
-   * Keeps chat snappy while still giving remote servers time to reconnect.
-   */
-  waitForMcpConnections = { timeout: 8_000 };
-
-  /**
    * Connect to an MCP server by URL.
-   * Exposed as an RPC method via @callable() so the UI can call it directly.
+   * Exposed as an RPC method so the UI can call it directly.
    *
-   * Clears any stale FAILED connection before retrying — DO instances survive
-   * deploys, so without this a failed connection blocks all future attempts
-   * until the DO instance is evicted.
+   * If a prior connection for the same name is stuck in FAILED, remove it
+   * before reconnecting.
    */
   @callable()
   async addServer(name: string, url: string, token?: string): Promise<void> {
-    const existing = this.mcp.listServers().find(s => s.name === name);
+    const existing = this.mcp.listServers().find((s) => s.name === name);
 
     if (existing) {
-      const conn = this.mcp.mcpConnections[existing.id];
-
-      if (conn?.connectionState === MCPConnectionState.FAILED) {
+      if (existing.state === 'failed') {
         console.log(`[MCP] Clearing stale FAILED connection for "${name}" before retrying`);
         await this.removeMcpServer(existing.id);
       } else {
-        // Already connected or connecting — nothing to do
+        // Already connected, connecting, or otherwise not failed.
         return;
       }
     }
@@ -50,47 +71,46 @@ export class ChatAgent extends AIChatAgent<Env> {
   }
 
   /**
-   * Disconnect an MCP server by name.
-   * Note: the underlying removeMcpServer() takes an ID, not a name —
-   * this method handles the lookup so callers just pass the friendly name.
+   * Disconnect an MCP server by friendly name.
    */
   @callable()
   async removeServer(name: string): Promise<void> {
-    const server = this.mcp.listServers().find(s => s.name === name);
+    const server = this.mcp.listServers().find((s) => s.name === name);
+
     if (!server) {
       console.warn(`[MCP] removeServer: no server named "${name}" found`);
       return;
     }
+
     await this.removeMcpServer(server.id);
     console.log(`[MCP] Disconnected "${name}"`);
   }
 
   /**
-   * Main chat handler — called by AIChatAgent on every user turn.
-   * All connected MCP tools are automatically available to the model.
+   * Main chat handler.
+   * All connected MCP tools are exposed to the model.
    */
-  async onChatMessage(onFinish: Parameters<AIChatAgent<Env>['onChatMessage']>[0]) {
+  async onChatMessage(
+    onFinish: Parameters<AIChatAgent<Env>['onChatMessage']>[0],
+  ) {
     const workersai = createWorkersAI({ binding: this.env.AI });
     const rawTools = this.mcp.getAITools();
     const hasTools = Object.keys(rawTools).length > 0;
 
-    // Wrap each tool's execute() to truncate oversized results that would
-    // blow the model's context window
     const tools = hasTools
       ? Object.fromEntries(
-          Object.entries(rawTools).map(([toolName, tool]) => {
-            if (!tool.execute) return [toolName, tool];
+          Object.entries(rawTools).map(([toolName, tool]: [string, any]) => {
+            if (typeof tool?.execute !== 'function') {
+              return [toolName, tool];
+            }
+
             return [
               toolName,
               {
                 ...tool,
                 execute: async (args: unknown, opts: unknown) => {
-                  const result = await tool.execute!(args, opts);
-                  const text = JSON.stringify(result);
-                  return text.length <= TOOL_RESULT_LIMIT
-                    ? result
-                    : text.slice(0, TOOL_RESULT_LIMIT) +
-                        '\n…[truncated — response too large for model context]';
+                  const result = await tool.execute(args, opts);
+                  return truncateToolResult(result);
                 },
               },
             ];
@@ -101,8 +121,8 @@ export class ChatAgent extends AIChatAgent<Env> {
     const result = streamText({
       model: workersai(DEFAULT_MODEL),
       system: this.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
-      messages: await convertToModelMessages(this.messages),
-      ...(hasTools ? { tools, maxSteps: 5 } : {}),
+      messages: convertToModelMessages(this.messages),
+      ...(hasTools ? { tools, stopWhen: stepCountIs(5) } : {}),
       onFinish,
     });
 
