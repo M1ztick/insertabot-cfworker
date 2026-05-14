@@ -1,26 +1,7 @@
 import { routeAgentRequest } from 'agents';
 import { ChatAgent } from './lib/durable';
-
-export interface Env {
-  AI: Ai;
-  ChatAgent: DurableObjectNamespace;
-  SYSTEM_PROMPT?: string;
-}
-
-function corsHeaders(origin = '*') {
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  };
-}
-
-function jsonResponse(data: unknown, status = 200, extraHeaders?: Record<string, string>) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...extraHeaders },
-  });
-}
+import { corsHeaders, jsonResponse } from './lib/utils';
+import type { Env } from './worker-configuration';
 
 function handleHealth(_request: Request, env: Env): Response {
   return jsonResponse(

@@ -1615,17 +1615,38 @@
 									if (!streaming) startStream(reqId);
 									appendChunk(chunk.delta ?? chunk.textDelta ?? '');
 									break;
+								case 'tool-input-start':
+								case 'tool-input-available':
 								case 'tool-call':
 									addToolPill(chunk.toolName ?? chunk.name ?? 'tool');
 									break;
+								case 'tool-output-available':
+								case 'tool-result':
+									// Tool resolved successfully — nothing to render,
+									// but make sure we keep streaming.
+									if (!streaming) startStream(reqId);
+									break;
+								case 'tool-output-error':
+								case 'tool-error': {
+									// THIS was the silent fail — these chunks were
+									// being dropped, so when a tool execution failed
+									// the UI just stopped streaming with no message.
+									const toolName = chunk.toolName ?? chunk.name ?? 'tool';
+									const errText  = chunk.errorText ?? chunk.error ?? 'tool execution failed';
+									if (!streaming) startStream(reqId);
+									streaming.text += `\n\n*[Tool \`${toolName}\` failed: ${errText}]*`;
+									finalizeStream();
+									break;
+								}
 								case 'finish':
 									finalizeStream();
 									break;
 								case 'error':
-									if (streaming) {
-										streaming.text += `\n\n*[Error: ${chunk.errorText ?? 'unknown'}]*`;
-										finalizeStream();
-									}
+									// Surface error even when no stream was open yet,
+									// otherwise we hang on silent provider failures.
+									if (!streaming) startStream(reqId);
+									streaming.text += `\n\n*[Error: ${chunk.errorText ?? chunk.error ?? 'unknown'}]*`;
+									finalizeStream();
 									break;
 							}
 						}
