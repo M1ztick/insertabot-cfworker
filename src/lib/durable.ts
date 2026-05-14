@@ -2,10 +2,14 @@ import { AIChatAgent } from '@cloudflare/ai-chat';
 import { callable } from 'agents';
 import { streamText, convertToModelMessages, stepCountIs } from 'ai';
 import { createWorkersAI } from 'workers-ai-provider';
-import type { Env } from '../index';
+import type { Env } from '../worker-configuration';
 
 const TOOL_RESULT_LIMIT = 12_000;
-const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.6';
+// NOTE: Workers AI does NOT have kimi-k2.6 — that's the AI Gateway id.
+// The Workers AI binding id is kimi-k2.5. Using a bogus id makes the
+// binding throw, which streamText folds into a stream-error chunk that
+// the front-end currently ignores (hence the silent fail).
+const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.5';
 const DEFAULT_SYSTEM_PROMPT =
   'You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.';
 
@@ -34,6 +38,12 @@ function truncateToolResult(result: unknown): unknown {
 }
 
 export class ChatAgent extends AIChatAgent<Env> {
+  // Wait for any MCP connections that are still restoring after DO
+  // hibernation before running the chat turn. Without this, getAITools()
+  // can return tool *schemas* whose underlying transport isn't ready yet,
+  // and the second-or-later tool call fails silently inside execute().
+  waitForMcpConnections: boolean | { timeout: number } = { timeout: 10_000 };
+
   /**
    * Connect to an MCP server by URL.
    * Exposed as an RPC method so the UI can call it directly.
@@ -111,10 +121,28 @@ export class ChatAgent extends AIChatAgent<Env> {
       model: workersai(DEFAULT_MODEL),
       system: this.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
       messages: await convertToModelMessages(this.messages),
+      // stopWhen must be set whenever tools are even *possible*, otherwise
+      // ai@6 defaults to stepCountIs(1) which terminates after the first
+      // tool-call step — that's why "the AI only works for a singular
+      // tool use before it stops responding". 5 multi-step rounds is a
+      // safe default.
       ...(hasTools ? { tools, stopWhen: stepCountIs(5) } : {}),
+      // Surface tool execution + provider errors to the UI stream instead
+      // of letting them disappear into the void.
+      onError({ error }) {
+        console.error('[streamText error]', error);
+      },
       onFinish,
     });
 
-    return result.toUIMessageStreamResponse();
+    return result.toUIMessageStreamResponse({
+      // Send error details over the stream so the front-end can render
+      // them. Without this, errors are replaced with a generic message
+      // and the UI just stops.
+      onError(error) {
+        console.error('[uiMessageStream error]', error);
+        return error instanceof Error ? error.message : String(error);
+      },
+    });
   }
 }
