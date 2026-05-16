@@ -2,10 +2,6 @@
 export interface Env {
 	AI: Ai;
 	ChatAgent: DurableObjectNamespace<import('./lib/durable').ChatAgent>;
-	// Add KV, D1, R2, secrets, etc. here as you wire them up
-	GITHUB_TOKEN?: string;
-	TAVILY_API_KEY?: string;
-	OPENAI_API_KEY?: string;
 	SYSTEM_PROMPT?: string;
 }
 

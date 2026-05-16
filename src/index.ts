@@ -24,6 +24,7 @@ function handleHealth(_request: Request, env: Env): Response {
 export { ChatAgent };
 
 export default {
+  // Placeholder: no scheduled work yet. Remove the cron trigger in wrangler.jsonc when no longer needed.
   async scheduled(event: ScheduledEvent, _env: Env, _ctx: ExecutionContext) {
     const safeCron = event.cron.replace(/[\r\n]/g, '');
     console.log(`Scheduled cron fired: ${safeCron} at ${new Date(event.scheduledTime).toISOString()}`);
