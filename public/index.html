@@ -274,22 +274,25 @@
 			.msg-row.assistant .bubble {
 				background: var(--surface2);
 				border: 1px solid var(--border);
+				padding: 14px 18px;
 			}
 
 			/* Markdown rendered content */
 			.bubble-content p {
-				margin-block-end: 0.6em;
+				margin-block-end: 0.75em;
+				line-height: 1.75;
 			}
 			.bubble-content p:last-child {
 				margin-block-end: 0;
 			}
 			.bubble-content ul,
 			.bubble-content ol {
-				padding-inline-start: 1.4em;
-				margin-block-end: 0.6em;
+				padding-inline-start: 1.5em;
+				margin-block-end: 0.75em;
 			}
 			.bubble-content li {
-				margin-block-end: 0.25em;
+				margin-block-end: 0.35em;
+				line-height: 1.65;
 			}
 			.bubble-content strong {
 				color: var(--text);
@@ -304,16 +307,16 @@
 				background: rgba(0, 245, 212, 0.08);
 				border: 1px solid rgba(0, 245, 212, 0.15);
 				border-radius: 4px;
-				padding: 1px 5px;
+				padding: 2px 6px;
 				color: var(--cyan);
 			}
 			.bubble-content pre {
 				background: var(--bg);
 				border: 1px solid var(--border);
 				border-radius: 8px;
-				padding: 12px;
+				padding: 14px 16px;
 				overflow-x: auto;
-				margin-block: 0.6em;
+				margin-block: 1em;
 			}
 			.bubble-content pre code {
 				background: none;
@@ -326,19 +329,36 @@
 			.bubble-content h2,
 			.bubble-content h3 {
 				font-family: 'Space Mono', monospace;
-				letter-spacing: 0.04em;
-				margin-block: 0.8em 0.4em;
+				font-weight: 700;
+				letter-spacing: 0.03em;
 				color: var(--text);
+				line-height: 1.3;
 			}
 			.bubble-content h1 {
-				font-size: 1.1em;
+				font-size: 1.3em;
+				margin-block: 1.2em 0.6em;
+				color: var(--cyan);
+				border-block-end: 1px solid rgba(0, 245, 212, 0.15);
+				padding-block-end: 0.3em;
 			}
 			.bubble-content h2 {
-				font-size: 1em;
+				font-size: 1.1em;
+				margin-block: 1.1em 0.5em;
+				color: var(--text);
+				padding-inline-start: 10px;
+				border-inline-start: 2px solid var(--border-cyan);
 			}
 			.bubble-content h3 {
 				font-size: 0.95em;
+				margin-block: 1em 0.4em;
 				color: var(--text-muted);
+				text-transform: uppercase;
+				letter-spacing: 0.07em;
+			}
+			.bubble-content h1:first-child,
+			.bubble-content h2:first-child,
+			.bubble-content h3:first-child {
+				margin-block-start: 0;
 			}
 			.bubble-content a {
 				color: var(--cyan);
@@ -349,24 +369,25 @@
 			}
 			.bubble-content blockquote {
 				border-inline-start: 2px solid var(--border-cyan);
-				padding-inline-start: 12px;
+				padding-inline-start: 14px;
 				color: var(--text-muted);
-				margin-block: 0.6em;
+				margin-block: 0.75em;
+				font-style: italic;
 			}
 			.bubble-content hr {
 				border: none;
 				border-block-start: 1px solid var(--border);
-				margin-block: 0.8em;
+				margin-block: 1em;
 			}
 			.bubble-content table {
 				inline-size: 100%;
 				border-collapse: collapse;
 				font-size: 0.85em;
-				margin-block: 0.6em;
+				margin-block: 0.75em;
 			}
 			.bubble-content th,
 			.bubble-content td {
-				padding: 6px 10px;
+				padding: 7px 12px;
 				border: 1px solid var(--border);
 				text-align: start;
 			}
