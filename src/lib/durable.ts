@@ -76,14 +76,14 @@ export class ChatAgent extends AIChatAgent<Env> {
    * Disconnect an MCP server by friendly name.
    */
   @callable()
-  async removeServer(name: string): Promise<void> {
-    const server = this.mcp.listServers().find((s) => s.name === name);
+  async removeServer(nameOrId: string): Promise<void> {
+    const server = this.mcp.listServers().find((s) => s.id === nameOrId || s.name === nameOrId);
     if (!server) {
-      console.warn(`[MCP] removeServer: no server named "${name}" found`);
+      console.warn(`[MCP] removeServer: no server matching "${nameOrId}" found`);
       return;
     }
     await this.removeMcpServer(server.id);
-    console.log(`[MCP] Disconnected "${name}"`);
+    console.log(`[MCP] Disconnected "${server.name}"`);
   }
 
   /**
