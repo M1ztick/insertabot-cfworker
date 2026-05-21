@@ -53,6 +53,26 @@ export class ChatAgent extends AIChatAgent<Env> {
    */
   @callable()
   async addServer(name: string, url: string, token?: string): Promise<void> {
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      throw new Error(`Invalid server URL: "${url}"`);
+    }
+
+    if (token) {
+      try {
+        new URL(token);
+        // If this succeeds, the user pasted a URL into the token field
+        throw new Error(
+          'The access token field contains a URL. If your MCP server uses a query-parameter API key (e.g. ?tavilyApiKey=…), include it in the Server URL field and leave the token field empty.',
+        );
+      } catch (e) {
+        // Re-throw our own validation error; ignore URL parse failures (expected for real tokens)
+        if ((e as Error).message.startsWith('The access token field')) throw e;
+      }
+    }
+
     const existing = this.mcp.listServers().find((s) => s.name === name);
     if (existing) {
       const conn = this.mcp.mcpConnections[existing.id];
@@ -60,14 +80,12 @@ export class ChatAgent extends AIChatAgent<Env> {
         console.log(`[MCP] Clearing stale FAILED connection for "${name}" before retrying`);
         await this.removeMcpServer(existing.id);
       } else {
-        // Already connected, connecting, or otherwise not failed.
         return;
       }
     }
+
     await this.addMcpServer(name, url, {
-      ...(token
-        ? { transport: { headers: { Authorization: `Bearer ${token}` } } }
-        : {}),
+      ...(token ? { transport: { headers: { Authorization: `Bearer ${token}` } } } : {}),
     });
     console.log(`[MCP] Connected to "${name}" at ${url}`);
   }
