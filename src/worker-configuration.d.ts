@@ -3,6 +3,10 @@ export interface Env {
 	AI: Ai;
 	ChatAgent: DurableObjectNamespace<import('./lib/durable').ChatAgent>;
 	SYSTEM_PROMPT?: string;
+	/** SAIGE Buddhist Ethics Framework endpoint */
+	SAIGE_ENDPOINT?: string;
+	/** Enable ethical moderation (defaults to true if SAIGE_ENDPOINT is set) */
+	SAIGE_ENABLED?: string;
 }
 
 declare global {

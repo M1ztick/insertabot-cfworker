@@ -50,4 +50,9 @@
 			},
 		],
 	},
+	"vars": {
+		"SYSTEM_PROMPT": "You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.",
+		"SAIGE_ENDPOINT": "https://buddhist-ai-worker.mistykmedia.workers.dev",
+		"SAIGE_ENABLED": "true"
+	}
 }
