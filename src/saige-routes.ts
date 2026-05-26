@@ -1,5 +1,7 @@
 /**
  * SAIGE API Routes for Insertabot Worker
+ * 
+ * Mounts on /saige/* endpoints
  */
 
 import {
@@ -11,7 +13,7 @@ import {
 
 export async function handleSaigeRequest(
   request: Request,
-  env: { DB: D1Database },
+  env: { DB?: D1Database },
   pathname: string
 ): Promise<Response> {
   const corsHeaders = {
@@ -20,12 +22,13 @@ export async function handleSaigeRequest(
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
+  // Handle CORS preflight
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // GET /saige/sutta-lookup?q=<query>
+    // GET /saige/sutta-lookup?q=<query>&collection=<col>&limit=<n>
     if (pathname === "/saige/sutta-lookup" && request.method === "GET") {
       const url = new URL(request.url);
       const query = url.searchParams.get("q");
@@ -44,7 +47,7 @@ export async function handleSaigeRequest(
       });
     }
 
-    // GET /saige/generate-record
+    // GET /saige/generate-record?canonical_id=MN+58&title=...&path_factor=...
     if (pathname === "/saige/generate-record" && request.method === "GET") {
       const url = new URL(request.url);
       const canonicalId = url.searchParams.get("canonical_id");
@@ -60,6 +63,7 @@ export async function handleSaigeRequest(
         );
       }
 
+      // Parse collection from canonical ID
       const collMatch = canonicalId.match(/^([A-Za-z]+)/);
       const collection = collMatch ? collMatch[1].toUpperCase() : "MN";
 
@@ -93,6 +97,8 @@ export async function handleSaigeRequest(
 
     // GET /saige/stats
     if (pathname === "/saige/stats" && request.method === "GET") {
+      // In production, this would query your D1 table
+      // For now, return a template/example
       const mockRecords = [
         { path_factor: "right_speech", collection: "SN", theme_tags: ["truthfulness"], annotation_status: "draft" },
         { path_factor: "right_speech", collection: "MN", theme_tags: ["benefit", "timing"], annotation_status: "draft" },
@@ -106,7 +112,21 @@ export async function handleSaigeRequest(
       });
     }
 
-    // GET /saige
+    // GET /saige/export?path_factor=right_speech
+    if (pathname === "/saige/export" && request.method === "GET") {
+      const url = new URL(request.url);
+      const pathFactor = url.searchParams.get("path_factor") || "all";
+      
+      return new Response(JSON.stringify({
+        message: "Export feature - connect to your D1 SAIGE table",
+        path_factor: pathFactor,
+        note: "Implement by querying your SAIGE records from D1",
+      }, null, 2), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // GET /saige - Info page
     if (pathname === "/saige" && request.method === "GET") {
       return new Response(JSON.stringify({
         name: "SAIGE API",
@@ -116,12 +136,14 @@ export async function handleSaigeRequest(
           { path: "/saige/generate-record", method: "GET", description: "Generate pre-filled record template" },
           { path: "/saige/validate", method: "POST", description: "Validate record JSON" },
           { path: "/saige/stats", method: "GET", description: "Get dataset statistics" },
+          { path: "/saige/export", method: "GET", description: "Export records by path factor" },
         ],
       }, null, 2), {
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
 
+    // Not found
     return new Response(
       JSON.stringify({ error: "SAIGE endpoint not found" }),
       { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -133,3 +155,4 @@ export async function handleSaigeRequest(
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
+}
