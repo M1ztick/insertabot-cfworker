@@ -2,6 +2,7 @@ import { routeAgentRequest } from 'agents';
 import { ChatAgent } from './lib/durable';
 import { corsHeaders, jsonResponse } from './lib/utils';
 import type { Env } from './worker-configuration';
+import { handleSaigeRequest } from "./saige-routes";
 
 function handleHealth(_request: Request, env: Env): Response {
   return jsonResponse(
@@ -31,9 +32,17 @@ export default {
   },
 
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-    // Handle CORS preflight for all routes
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+    
+    // Handle CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders() });
+    }
+    
+    // Check SAIGE routes (after CORS, before agent routes)
+    if (pathname.startsWith("/saige")) {
+      return handleSaigeRequest(request, env, pathname);
     }
 
     // Hand off to the Agents SDK — handles WebSocket upgrades, agent RPC,
@@ -41,10 +50,8 @@ export default {
     const agentResponse = await routeAgentRequest(request, env);
     if (agentResponse) return agentResponse;
 
-    const url = new URL(request.url);
-
     try {
-      switch (url.pathname) {
+      switch (pathname) {
         case '/health':
           return handleHealth(request, env);
         case '/favicon.ico':
