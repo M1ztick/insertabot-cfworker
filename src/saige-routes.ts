@@ -7,13 +7,20 @@
 import {
   buildSuttaLookup,
   createSaigeRecordTemplate,
-  getDatasetStats,
   validateSaigeRecord,
 } from "./saige";
+import {
+  fetchSaigeDatasetFromR2,
+  listSaigeDatasets,
+  searchRecords,
+  filterByPathFactor,
+  calculateDatasetStats,
+} from "./lib/saige-r2";
+import type { Env } from "./worker-configuration";
 
 export async function handleSaigeRequest(
   request: Request,
-  env: { DB?: D1Database },
+  env: Env,
   pathname: string
 ): Promise<Response> {
   const corsHeaders = {
@@ -85,6 +92,32 @@ export async function handleSaigeRequest(
       });
     }
 
+    // GET /saige/records?q=<query>&path_factor=<pf>
+    if (pathname === "/saige/records" && request.method === "GET") {
+      const url = new URL(request.url);
+      const query = url.searchParams.get("q");
+      const pathFactor = url.searchParams.get("path_factor");
+      
+      let records = await fetchSaigeDatasetFromR2(
+        env.SAIGE_TRAINING_DATA,
+        env.SAIGE_R2_DATASET || 'saige_dataset_final.csv'
+      );
+      
+      // Filter by path factor if provided
+      if (pathFactor) {
+        records = filterByPathFactor(records, pathFactor);
+      }
+      
+      // Search if query provided
+      if (query) {
+        records = searchRecords(records, query);
+      }
+      
+      return new Response(JSON.stringify(records, null, 2), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
     // POST /saige/validate
     if (pathname === "/saige/validate" && request.method === "POST") {
       const record = await request.json() as Record<string, unknown>;
@@ -97,17 +130,26 @@ export async function handleSaigeRequest(
 
     // GET /saige/stats
     if (pathname === "/saige/stats" && request.method === "GET") {
-      // In production, this would query your D1 table
-      // For now, return a template/example
-      const mockRecords = [
-        { path_factor: "right_speech", collection: "SN", theme_tags: ["truthfulness"], annotation_status: "draft" },
-        { path_factor: "right_speech", collection: "MN", theme_tags: ["benefit", "timing"], annotation_status: "draft" },
-        { path_factor: "right_action", collection: "MN", theme_tags: ["non-harm"], annotation_status: "draft" },
-      ];
+      const records = await fetchSaigeDatasetFromR2(
+        env.SAIGE_TRAINING_DATA,
+        env.SAIGE_R2_DATASET || 'saige_dataset_final.csv'
+      );
 
-      const stats = getDatasetStats(mockRecords);
+      const stats = calculateDatasetStats(records);
       
       return new Response(JSON.stringify(stats, null, 2), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // GET /saige/datasets
+    if (pathname === "/saige/datasets" && request.method === "GET") {
+      const datasets = await listSaigeDatasets(env.SAIGE_TRAINING_DATA);
+      
+      return new Response(JSON.stringify({
+        datasets,
+        current: env.SAIGE_R2_DATASET || 'saige_dataset_final.csv'
+      }, null, 2), {
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
@@ -115,14 +157,23 @@ export async function handleSaigeRequest(
     // GET /saige/export?path_factor=right_speech
     if (pathname === "/saige/export" && request.method === "GET") {
       const url = new URL(request.url);
-      const pathFactor = url.searchParams.get("path_factor") || "all";
+      const pathFactor = url.searchParams.get("path_factor");
       
-      return new Response(JSON.stringify({
-        message: "Export feature - connect to your D1 SAIGE table",
-        path_factor: pathFactor,
-        note: "Implement by querying your SAIGE records from D1",
-      }, null, 2), {
-        headers: { "Content-Type": "application/json", ...corsHeaders },
+      let records = await fetchSaigeDatasetFromR2(
+        env.SAIGE_TRAINING_DATA,
+        env.SAIGE_R2_DATASET || 'saige_dataset_final.csv'
+      );
+      
+      if (pathFactor) {
+        records = filterByPathFactor(records, pathFactor);
+      }
+      
+      return new Response(JSON.stringify(records, null, 2), {
+        headers: { 
+          "Content-Type": "application/json", 
+          "Content-Disposition": `attachment; filename="saige-export-${pathFactor || 'all'}.json"`,
+          ...corsHeaders 
+        },
       });
     }
 
@@ -134,9 +185,11 @@ export async function handleSaigeRequest(
         endpoints: [
           { path: "/saige/sutta-lookup?q=<query>", method: "GET", description: "Search suttas by topic" },
           { path: "/saige/generate-record", method: "GET", description: "Generate pre-filled record template" },
+          { path: "/saige/records?q=<query>&path_factor=<pf>", method: "GET", description: "Query SAIGE dataset from R2" },
           { path: "/saige/validate", method: "POST", description: "Validate record JSON" },
-          { path: "/saige/stats", method: "GET", description: "Get dataset statistics" },
-          { path: "/saige/export", method: "GET", description: "Export records by path factor" },
+          { path: "/saige/stats", method: "GET", description: "Get dataset statistics from R2" },
+          { path: "/saige/datasets", method: "GET", description: "List available CSV datasets in R2" },
+          { path: "/saige/export?path_factor=<pf>", method: "GET", description: "Export records as JSON" },
         ],
       }, null, 2), {
         headers: { "Content-Type": "application/json", ...corsHeaders },
