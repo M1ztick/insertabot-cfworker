@@ -3,7 +3,7 @@ import { callable } from 'agents';
 import { streamText, convertToModelMessages, stepCountIs } from 'ai';
 import { createWorkersAI } from 'workers-ai-provider';
 import type { Env } from '../worker-configuration';
-import { evaluateEthics, isEthicalModerationEnabled, formatEthicsLog, type EthicsEvaluationResult } from './ethical-moderation';
+import { isEthicalModerationEnabled } from './ethical-moderation';
 
 const TOOL_RESULT_LIMIT = 12_000;
 // NOTE: Workers AI does NOT have kimi-k2.6 — that's the AI Gateway id.
@@ -13,9 +13,6 @@ const TOOL_RESULT_LIMIT = 12_000;
 const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.5';
 const DEFAULT_SYSTEM_PROMPT =
   'You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.';
-
-// SAIGE integration constants
-const ETHICS_SUFFIX = '\n\n[Response evaluated by SAIGE ethical framework]';
 
 function truncateToolResult(result: unknown): unknown {
   if (typeof result === 'string') {
@@ -57,9 +54,8 @@ export class ChatAgent extends AIChatAgent<Env> {
    */
   @callable()
   async addServer(name: string, url: string, token?: string): Promise<void> {
-    let parsedUrl: URL;
     try {
-      parsedUrl = new URL(url);
+      new URL(url);
     } catch {
       throw new Error(`Invalid server URL: "${url}"`);
     }
@@ -109,76 +105,6 @@ export class ChatAgent extends AIChatAgent<Env> {
   }
 
   /**
-   * Evaluate a response using SAIGE ethics framework.
-   * Returns the evaluation result and optionally regenerates if it fails ethics.
-   */
-  private async evaluateAndRegenerateIfNeeded(
-    userMessage: string,
-    assistantResponse: string
-  ): Promise<{ response: string; ethics?: EthicsEvaluationResult }> {
-    if (!isEthicalModerationEnabled(this.env)) {
-      return { response: assistantResponse };
-    }
-
-    const ethics = await evaluateEthics(
-      userMessage,
-      assistantResponse,
-      this.env.SAIGE_ENDPOINT
-    );
-
-    // Log ethics scores for observability
-    console.log('[SAIGE] Ethics evaluation:', formatEthicsLog(ethics));
-
-    if (ethics.passed) {
-      return { 
-        response: assistantResponse + ETHICS_SUFFIX,
-        ethics 
-      };
-    }
-
-    console.warn('[SAIGE] Response failed ethics check:', ethics.failureReason);
-
-    // Regenerate with ethical guidance
-    const ethicalPrompt = `${this.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT}
-
-IMPORTANT: Your previous response did not meet ethical standards.
-Guidance for improvement: ${ethics.guidance}
-
-Please provide a response that better embodies:
-- Ahimsa (non-harm): Avoid causing suffering
-- Sacca (truthfulness): Be honest and accurate
-- Karuna (compassion): Show genuine care
-- Panna (wisdom): Consider context deeply
-- Upekkha (equanimity): Remain calm and balanced`;
-
-    const workersai = createWorkersAI({ binding: this.env.AI });
-    const messages = await convertToModelMessages(this.messages);
-    
-    // Remove last assistant message and regenerate
-    const messagesWithoutLast = messages.slice(0, -1);
-    
-    const result = streamText({
-      model: workersai(DEFAULT_MODEL),
-      system: ethicalPrompt,
-      messages: messagesWithoutLast,
-    });
-
-    // Collect the regenerated response
-    let regeneratedText = '';
-    for await (const chunk of result.textStream) {
-      regeneratedText += chunk;
-    }
-
-    // Re-evaluate the regenerated response
-    const secondEthics = await evaluateEthics(userMessage, regeneratedText, this.env.SAIGE_ENDPOINT);
-    
-    return {
-      response: regeneratedText + ETHICS_SUFFIX + '\n[Ethically regenerated]',
-      ethics: secondEthics,
-    };
-  }
-
-  /**
    * Main chat handler.
    * All connected MCP tools are exposed to the model.
    */
@@ -212,7 +138,11 @@ Please provide a response that better embodies:
     // Get the last user message for ethical evaluation
     const lastUserMessage = this.messages
       .filter(m => m.role === 'user')
-      .pop()?.content || '';
+      .pop()
+      ?.parts
+      .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+      .map(p => p.text)
+      .join('') ?? '';
 
     const result = streamText({
       model: workersai(DEFAULT_MODEL),

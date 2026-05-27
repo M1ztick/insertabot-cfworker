@@ -2,11 +2,14 @@
 export interface Env {
 	AI: Ai;
 	ChatAgent: DurableObjectNamespace<import('./lib/durable').ChatAgent>;
+	SAIGE_TRAINING_DATA: R2Bucket;
 	SYSTEM_PROMPT?: string;
 	/** SAIGE Buddhist Ethics Framework endpoint */
 	SAIGE_ENDPOINT?: string;
 	/** Enable ethical moderation (defaults to true if SAIGE_ENDPOINT is set) */
 	SAIGE_ENABLED?: string;
+	/** R2 object key for the SAIGE training dataset */
+	SAIGE_R2_DATASET?: string;
 }
 
 declare global {

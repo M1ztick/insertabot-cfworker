@@ -100,7 +100,7 @@ export async function evaluateEthics(
       };
     }
 
-    const data = await response.json();
+    const data = await response.json() as Record<string, any>;
     
     // Parse SAIGE response format
     const scores: EthicalScore = {

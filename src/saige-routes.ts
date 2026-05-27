@@ -1,7 +1,8 @@
 /**
  * SAIGE API Routes for Insertabot Worker
- * 
- * Mounts on /saige/* endpoints
+ *
+ * Mounts on /saige/* endpoints. Dataset is stored in R2 as a CSV
+ * under the key specified by the SAIGE_R2_DATASET env var.
  */
 
 import {
@@ -10,41 +11,82 @@ import {
   getDatasetStats,
   validateSaigeRecord,
 } from "./saige";
+import type { Env } from "./worker-configuration";
+
+// ─── CSV helpers ────────────────────────────────────────────────────────────
+
+function parseCsvRow(line: string): string[] {
+  const fields: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { field += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(field);
+      field = '';
+    } else {
+      field += ch;
+    }
+  }
+  fields.push(field);
+  return fields;
+}
+
+function parseCsv(text: string): Array<Record<string, unknown>> {
+  const lines = text.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+
+  const headers = parseCsvRow(lines[0]);
+  return lines.slice(1).map(line => {
+    const values = parseCsvRow(line);
+    const record: Record<string, unknown> = {};
+    headers.forEach((h, i) => {
+      const val = values[i] ?? '';
+      if (val.startsWith('[') || val.startsWith('{')) {
+        try { record[h] = JSON.parse(val); return; } catch { /* fall through */ }
+      }
+      record[h] = val;
+    });
+    return record;
+  });
+}
+
+async function readDataset(env: Env): Promise<Array<Record<string, unknown>> | null> {
+  const key = env.SAIGE_R2_DATASET ?? 'saige_dataset_final.csv';
+  const object = await env.SAIGE_TRAINING_DATA.get(key);
+  if (!object) return null;
+  return parseCsv(await object.text());
+}
+
+// ─── Route handler ───────────────────────────────────────────────────────────
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+function json(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders },
+  });
+}
 
 export async function handleSaigeRequest(
   request: Request,
-  env: { DB: D1Database },
+  env: Env,
   pathname: string
 ): Promise<Response> {
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
-
-  // Handle CORS preflight
-  if (request.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
   try {
-    // GET /saige/sutta-lookup?q=<query>&collection=<col>&limit=<n>
+    // GET /saige/sutta-lookup?q=<query>
     if (pathname === "/saige/sutta-lookup" && request.method === "GET") {
-      const url = new URL(request.url);
-      const query = url.searchParams.get("q");
-      
-      if (!query) {
-        return new Response(
-          JSON.stringify({ error: "Missing query parameter 'q'" }),
-          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      }
-
-      const results = await buildSuttaLookup(query);
-      
-      return new Response(JSON.stringify(results), {
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+      const q = new URL(request.url).searchParams.get("q");
+      if (!q) return json({ error: "Missing query parameter 'q'" }, 400);
+      return json(await buildSuttaLookup(q));
     }
 
     // GET /saige/generate-record?canonical_id=MN+58&title=...&path_factor=...
@@ -52,29 +94,16 @@ export async function handleSaigeRequest(
       const url = new URL(request.url);
       const canonicalId = url.searchParams.get("canonical_id");
       const title = url.searchParams.get("title");
-      const pathFactor = url.searchParams.get("path_factor") || "right_speech";
-      const translator = url.searchParams.get("translator") || "";
-      const tags = url.searchParams.get("tags")?.split(",") || [];
+      const pathFactor = url.searchParams.get("path_factor") ?? "right_speech";
+      const translator = url.searchParams.get("translator") ?? "";
+      const tags = url.searchParams.get("tags")?.split(",") ?? [];
 
       if (!canonicalId || !title) {
-        return new Response(
-          JSON.stringify({ error: "Missing required parameters: canonical_id, title" }),
-          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
+        return json({ error: "Missing required parameters: canonical_id, title" }, 400);
       }
 
-      // Parse collection from canonical ID
       const collMatch = canonicalId.match(/^([A-Za-z]+)/);
       const collection = collMatch ? collMatch[1].toUpperCase() : "MN";
-
-      // Get highest existing ID for this path factor
-      const existingIds: string[] = [];
-      try {
-        // Query D1 for existing SAIGE records (if you have a table for them)
-        // For now, use a simple increment counter in KV or just return template
-      } catch {
-        // Ignore errors, use default ID
-      }
 
       const record = createSaigeRecordTemplate(
         canonicalId,
@@ -82,86 +111,69 @@ export async function handleSaigeRequest(
         collection,
         pathFactor,
         `https://suttacentral.net/${canonicalId.toLowerCase().replace(/\s/g, "")}`,
-        {
-          id: `saige-${pathFactor.substring(0, 2)}-XXX`,
-          translator,
-          themeTags: tags,
-        }
+        { translator, themeTags: tags }
       );
 
-      return new Response(JSON.stringify(record, null, 2), {
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+      return json(record);
     }
 
     // POST /saige/validate
     if (pathname === "/saige/validate" && request.method === "POST") {
       const record = await request.json() as Record<string, unknown>;
-      const validation = validateSaigeRecord(record);
-      
-      return new Response(JSON.stringify(validation, null, 2), {
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+      return json(validateSaigeRecord(record));
     }
 
-    // GET /saige/stats
+    // GET /saige/stats — reads live data from R2
     if (pathname === "/saige/stats" && request.method === "GET") {
-      // In production, this would query your D1 table
-      // For now, return a template/example
-      const mockRecords = [
-        { path_factor: "right_speech", collection: "SN", theme_tags: ["truthfulness"], annotation_status: "draft" },
-        { path_factor: "right_speech", collection: "MN", theme_tags: ["benefit", "timing"], annotation_status: "draft" },
-        { path_factor: "right_action", collection: "MN", theme_tags: ["non-harm"], annotation_status: "draft" },
-      ];
-
-      const stats = getDatasetStats(mockRecords);
-      
-      return new Response(JSON.stringify(stats, null, 2), {
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+      const records = await readDataset(env);
+      if (!records) {
+        return json({
+          error: "Dataset not found",
+          key: env.SAIGE_R2_DATASET ?? 'saige_dataset_final.csv',
+          bucket: "SAIGE_TRAINING_DATA",
+        }, 404);
+      }
+      return json(getDatasetStats(records));
     }
 
     // GET /saige/export?path_factor=right_speech
     if (pathname === "/saige/export" && request.method === "GET") {
-      const url = new URL(request.url);
-      const pathFactor = url.searchParams.get("path_factor") || "all";
-      
-      return new Response(JSON.stringify({
-        message: "Export feature - connect to your D1 SAIGE table",
-        path_factor: pathFactor,
-        note: "Implement by querying your SAIGE records from D1",
-      }, null, 2), {
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+      const pathFactor = new URL(request.url).searchParams.get("path_factor");
+      const records = await readDataset(env);
+      if (!records) {
+        return json({
+          error: "Dataset not found",
+          key: env.SAIGE_R2_DATASET ?? 'saige_dataset_final.csv',
+        }, 404);
+      }
+      const filtered = pathFactor
+        ? records.filter(r => r.path_factor === pathFactor)
+        : records;
+      return json(filtered);
     }
 
-    // GET /saige - Info page
+    // GET /saige — info
     if (pathname === "/saige" && request.method === "GET") {
-      return new Response(JSON.stringify({
+      return json({
         name: "SAIGE API",
         description: "Sutta-based AI Governance & Ethics toolkit",
+        dataset: {
+          bucket: "SAIGE_TRAINING_DATA",
+          key: env.SAIGE_R2_DATASET ?? 'saige_dataset_final.csv',
+        },
         endpoints: [
           { path: "/saige/sutta-lookup?q=<query>", method: "GET", description: "Search suttas by topic" },
           { path: "/saige/generate-record", method: "GET", description: "Generate pre-filled record template" },
           { path: "/saige/validate", method: "POST", description: "Validate record JSON" },
-          { path: "/saige/stats", method: "GET", description: "Get dataset statistics" },
-          { path: "/saige/export", method: "GET", description: "Export records by path factor" },
+          { path: "/saige/stats", method: "GET", description: "Get dataset statistics from R2" },
+          { path: "/saige/export?path_factor=<factor>", method: "GET", description: "Export records from R2 as JSON" },
         ],
-      }, null, 2), {
-        headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
 
-    // Not found
-    return new Response(
-      JSON.stringify({ error: "SAIGE endpoint not found" }),
-      { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    return json({ error: "SAIGE endpoint not found" }, 404);
   } catch (error) {
     console.error("SAIGE endpoint error:", error);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    return json({ error: "Internal server error" }, 500);
   }
 }
