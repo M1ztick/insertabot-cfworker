@@ -33,6 +33,12 @@
 	"ai": {
 		"binding": "AI",
 	},
+	"r2_buckets": [
+		{
+			"binding": "SAIGE_TRAINING_DATA",
+			"bucket_name": "saige-training-data"
+		}
+	],
 	"triggers": {
 		"crons": ["0 */1 * * *"],
 	},
@@ -52,7 +58,8 @@
 	},
 	"vars": {
 		"SYSTEM_PROMPT": "You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.",
-		"SAIGE_ENDPOINT": "https://buddhist-ai-worker.mistykmedia.workers.dev",
-		"SAIGE_ENABLED": "true"
+		"SAIGE_ENDPOINT": "https://cfworker.insertabot.io/saige",
+		"SAIGE_ENABLED": "true",
+		"SAIGE_R2_DATASET": "saige_dataset_final.csv"
 	}
 }
