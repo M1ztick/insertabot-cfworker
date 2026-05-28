@@ -60,6 +60,6 @@
 		"SYSTEM_PROMPT": "You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.",
 		"SAIGE_ENDPOINT": "https://cfworker.insertabot.io/saige",
 		"SAIGE_ENABLED": "true",
-		"SAIGE_R2_DATASET": "saige_dataset_final.csv"
+		"SAIGE_R2_DATASET": "local-trainer/saige_gold_dataset_v3.csv"
 	}
 }
