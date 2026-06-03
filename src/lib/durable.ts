@@ -107,7 +107,7 @@ export class ChatAgent extends AIChatAgent<Env> {
   async onChatMessage(
     onFinish: Parameters<AIChatAgent<Env>['onChatMessage']>[0],
   ) {
-    const workersai = createWorkersAI({ binding: this.env.AI });
+    const workersai = createWorkersAI({ binding: this.env.AI, gateway: { id: 'insertabot-cfworker' } });
     const rawTools = this.mcp.getAITools();
     const hasTools = Object.keys(rawTools).length > 0;
 
@@ -141,7 +141,13 @@ export class ChatAgent extends AIChatAgent<Env> {
       .join('') ?? '';
 
     const result = streamText({
-      model: workersai(DEFAULT_MODEL),
+      model: workersai(DEFAULT_MODEL, {
+        // kimi-k2.6 renamed enable_thinking → thinking; disable it to avoid the
+        // 8005 "Internal server error" that triggers when the backend tries to stream
+        // reasoning tokens through a path that isn't fully stable yet.
+        // Types still reflect k2.5 (enable_thinking); cast to send the k2.6 param name.
+        chat_template_kwargs: { thinking: false } as Record<string, unknown>,
+      }),
       system: this.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
       messages: await convertToModelMessages(this.messages),
       // stopWhen must be set whenever tools are even *possible*, otherwise
