@@ -6,11 +6,7 @@ import type { Env } from '../worker-configuration';
 import { isEthicalModerationEnabled } from './ethical-moderation';
 
 const TOOL_RESULT_LIMIT = 12_000;
-// NOTE: Workers AI does NOT have kimi-k2.6 — that's the AI Gateway id.
-// The Workers AI binding id is kimi-k2.5. Using a bogus id makes the
-// binding throw, which streamText folds into a stream-error chunk that
-// the front-end currently ignores (hence the silent fail).
-const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.5';
+const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.6';
 const DEFAULT_SYSTEM_PROMPT =
   'You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.';
 
