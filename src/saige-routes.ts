@@ -152,6 +152,28 @@ export async function handleSaigeRequest(
       return json(filtered);
     }
 
+    // GET /saige/conversations?date=YYYY-MM-DD&limit=50
+    if (pathname === "/saige/conversations" && request.method === "GET") {
+      const url = new URL(request.url);
+      const date = url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
+      const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
+      const prefix = `conversations/${date}/`;
+      const listed = await env.SAIGE_TRAINING_DATA.list({ prefix, limit });
+      const records = await Promise.all(
+        listed.objects.map(async (obj) => {
+          const raw = await env.SAIGE_TRAINING_DATA.get(obj.key);
+          if (!raw) return null;
+          try { return await raw.json(); } catch { return null; }
+        })
+      );
+      return json({
+        date,
+        count: records.filter(Boolean).length,
+        truncated: listed.truncated,
+        records: records.filter(Boolean),
+      });
+    }
+
     // GET /saige — info
     if (pathname === "/saige" && request.method === "GET") {
       return json({
@@ -167,6 +189,7 @@ export async function handleSaigeRequest(
           { path: "/saige/validate", method: "POST", description: "Validate record JSON" },
           { path: "/saige/stats", method: "GET", description: "Get dataset statistics from R2" },
           { path: "/saige/export?path_factor=<factor>", method: "GET", description: "Export records from R2 as JSON" },
+          { path: "/saige/conversations?date=YYYY-MM-DD&limit=50", method: "GET", description: "Browse scored conversation turns" },
         ],
       });
     }

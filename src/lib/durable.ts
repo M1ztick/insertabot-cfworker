@@ -165,14 +165,35 @@ export class ChatAgent extends AIChatAgent<Env> {
       onFinish: async (event) => {
         if (isEthicalModerationEnabled(this.env) && lastUserMessage && event.text) {
           try {
-            const result = await evaluateEthics(
+            const evaluation = await evaluateEthics(
               lastUserMessage,
               event.text,
               this.env.SAIGE_ENDPOINT,
             );
-            console.log('[SAIGE]', JSON.stringify(formatEthicsLog(result)));
+            console.log('[SAIGE]', JSON.stringify(formatEthicsLog(evaluation)));
+
+            // Persist scored turn to R2 for research dataset
+            const now = new Date();
+            const datePrefix = now.toISOString().slice(0, 10); // YYYY-MM-DD
+            const agentId = this.ctx.id.toString();
+            const key = `conversations/${datePrefix}/${agentId}/${now.getTime()}.json`;
+            const record = {
+              agentId,
+              timestamp: now.toISOString(),
+              userMessage: lastUserMessage,
+              assistantResponse: event.text,
+              ethics: evaluation,
+            };
+            await this.env.SAIGE_TRAINING_DATA.put(key, JSON.stringify(record), {
+              httpMetadata: { contentType: 'application/json' },
+              customMetadata: {
+                passed: String(evaluation.passed),
+                composite: String(evaluation.scores.composite),
+                harm: String(evaluation.scores.harm),
+              },
+            });
           } catch (err) {
-            console.error('[SAIGE] Unexpected evaluation error:', err);
+            console.error('[SAIGE] Evaluation/persist error:', err);
           }
         }
         onFinish?.(event);
