@@ -3,7 +3,7 @@ import { callable } from 'agents';
 import { streamText, convertToModelMessages, stepCountIs } from 'ai';
 import { createWorkersAI } from 'workers-ai-provider';
 import type { Env } from '../worker-configuration';
-import { isEthicalModerationEnabled } from './ethical-moderation';
+import { isEthicalModerationEnabled, evaluateEthics, formatEthicsLog } from './ethical-moderation';
 
 const TOOL_RESULT_LIMIT = 12_000;
 const sanitize = (s: string) => s.replace(/[\r\n]/g, ' ');
@@ -163,14 +163,18 @@ export class ChatAgent extends AIChatAgent<Env> {
         console.error('[streamText error]', error);
       },
       onFinish: async (event) => {
-        // Run SAIGE ethics evaluation on the completed response if enabled
-        if (isEthicalModerationEnabled(this.env) && lastUserMessage) {
-          // Note: We can't easily get the full response text here from the event
-          // In a production implementation, you might want to store this in the 
-          // message history and evaluate on the next turn, or use a different approach
-          console.log('[SAIGE] Ethics evaluation would run here on completed response');
+        if (isEthicalModerationEnabled(this.env) && lastUserMessage && event.text) {
+          try {
+            const result = await evaluateEthics(
+              lastUserMessage,
+              event.text,
+              this.env.SAIGE_ENDPOINT,
+            );
+            console.log('[SAIGE]', JSON.stringify(formatEthicsLog(result)));
+          } catch (err) {
+            console.error('[SAIGE] Unexpected evaluation error:', err);
+          }
         }
-        
         onFinish?.(event);
       },
     });
