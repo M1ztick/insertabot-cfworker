@@ -6,6 +6,7 @@ import type { Env } from '../worker-configuration';
 import { isEthicalModerationEnabled } from './ethical-moderation';
 
 const TOOL_RESULT_LIMIT = 12_000;
+const sanitize = (s: string) => s.replace(/[\r\n]/g, ' ');
 const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.6';
 const DEFAULT_SYSTEM_PROMPT =
   'You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.';
@@ -73,7 +74,7 @@ export class ChatAgent extends AIChatAgent<Env> {
     if (existing) {
       const conn = this.mcp.mcpConnections[existing.id];
       if (conn?.connectionState === 'failed') {
-        console.log(`[MCP] Clearing stale FAILED connection for "${name}" before retrying`);
+        console.log(`[MCP] Clearing stale FAILED connection for "${sanitize(name)}" before retrying`);
         await this.removeMcpServer(existing.id);
       } else {
         return;
@@ -83,7 +84,7 @@ export class ChatAgent extends AIChatAgent<Env> {
     await this.addMcpServer(name, url, {
       ...(token ? { transport: { headers: { Authorization: `Bearer ${token}` } } } : {}),
     });
-    console.log(`[MCP] Connected to "${name}" at ${url}`);
+    console.log(`[MCP] Connected to "${sanitize(name)}" at ${sanitize(url)}`);
   }
 
   /**
@@ -93,11 +94,11 @@ export class ChatAgent extends AIChatAgent<Env> {
   async removeServer(nameOrId: string): Promise<void> {
     const server = this.mcp.listServers().find((s) => s.id === nameOrId || s.name === nameOrId);
     if (!server) {
-      console.warn(`[MCP] removeServer: no server matching "${nameOrId}" found`);
+      console.warn(`[MCP] removeServer: no server matching "${sanitize(nameOrId)}" found`);
       return;
     }
     await this.removeMcpServer(server.id);
-    console.log(`[MCP] Disconnected "${server.name}"`);
+    console.log(`[MCP] Disconnected "${sanitize(server.name)}"`);
   }
 
   /**
