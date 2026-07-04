@@ -3,7 +3,6 @@ import { callable } from 'agents';
 import { streamText, convertToModelMessages, stepCountIs } from 'ai';
 import { createWorkersAI } from 'workers-ai-provider';
 import type { Env } from '../worker-configuration';
-import { isEthicalModerationEnabled, evaluateEthics, formatEthicsLog } from './ethical-moderation';
 
 const TOOL_RESULT_LIMIT = 12_000;
 const sanitize = (s: string) => s.replace(/[\r\n]/g, ' ');
@@ -132,15 +131,6 @@ export class ChatAgent extends AIChatAgent<Env> {
         )
       : {};
 
-    // Get the last user message for ethical evaluation
-    const lastUserMessage = this.messages
-      .filter(m => m.role === 'user')
-      .pop()
-      ?.parts
-      .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-      .map(p => p.text)
-      .join('') ?? '';
-
     const result = streamText({
       model: workersai(DEFAULT_MODEL, {
         // kimi-k2.6 renamed enable_thinking → thinking; disable it to avoid the
@@ -162,42 +152,7 @@ export class ChatAgent extends AIChatAgent<Env> {
       onError({ error }) {
         console.error('[streamText error]', error);
       },
-      onFinish: async (event) => {
-        if (isEthicalModerationEnabled(this.env) && lastUserMessage && event.text) {
-          try {
-            const evaluation = await evaluateEthics(
-              lastUserMessage,
-              event.text,
-              this.env.SAIGE_ENDPOINT,
-            );
-            console.log('[SAIGE]', JSON.stringify(formatEthicsLog(evaluation)));
-
-            // Persist scored turn to R2 for research dataset
-            const now = new Date();
-            const datePrefix = now.toISOString().slice(0, 10); // YYYY-MM-DD
-            const agentId = this.ctx.id.toString();
-            const key = `conversations/${datePrefix}/${agentId}/${now.getTime()}.json`;
-            const record = {
-              agentId,
-              timestamp: now.toISOString(),
-              userMessage: lastUserMessage,
-              assistantResponse: event.text,
-              ethics: evaluation,
-            };
-            await this.env.SAIGE_TRAINING_DATA.put(key, JSON.stringify(record), {
-              httpMetadata: { contentType: 'application/json' },
-              customMetadata: {
-                passed: String(evaluation.passed),
-                composite: String(evaluation.scores.composite),
-                harm: String(evaluation.scores.harm),
-              },
-            });
-          } catch (err) {
-            console.error('[SAIGE] Evaluation/persist error:', err);
-          }
-        }
-        onFinish?.(event);
-      },
+      onFinish,
     });
 
     return result.toUIMessageStreamResponse({
