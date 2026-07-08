@@ -122,6 +122,9 @@ export class ChatAgent extends AIChatAgent<Env> {
               {
                 ...tool,
                 execute: async (args: unknown, opts: unknown) => {
+                  if (args === null || typeof args !== 'object' || Array.isArray(args)) {
+                    throw new Error(`Tool "${toolName}" received invalid arguments: expected a plain object`);
+                  }
                   const result = await tool.execute(args, opts);
                   return truncateToolResult(result);
                 },

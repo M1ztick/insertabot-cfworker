@@ -11,16 +11,19 @@
     "types": "wrangler types"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260508.1",
+    "@cloudflare/workers-types": "^5.20260708.1",
     "esbuild": "^0.25.0",
     "typescript": "^5.8.0",
-    "wrangler": "^4.84.1"
+    "wrangler": "^4.108.0"
+  },
+  "overrides": {
+    "ws": ">=8.21.0"
   },
   "dependencies": {
-    "@cloudflare/ai-chat": "^0.8.0",
-    "agents": "^0.14.0",
+    "@cloudflare/ai-chat": "^0.9.3",
+    "agents": "^0.17.3",
     "ai": "^6.0.176",
-    "workers-ai-provider": "^3.1.14",
+    "workers-ai-provider": "^3.3.1",
     "zod": "^4.4.3"
   }
 }
