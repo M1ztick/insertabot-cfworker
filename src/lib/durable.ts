@@ -6,9 +6,43 @@ import type { Env } from '../worker-configuration';
 
 const TOOL_RESULT_LIMIT = 12_000;
 const sanitize = (s: string) => s.replace(/[\r\n]/g, ' ');
-const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.6';
 const DEFAULT_SYSTEM_PROMPT =
   'You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.';
+
+type ModelLane = 'research' | 'coding';
+
+// Which model handles a turn depends on what the session is for. Sessions
+// are already isolated per named DO instance, so the MCP servers attached
+// to a session are a natural signal of intent (a session with GitHub's MCP
+// server attached is a coding session) — no separate classification step
+// needed. `setModelLane` below is the manual override for sessions that mix
+// tools and need a hint stronger than that inference.
+const MODEL_LANES: Record<ModelLane, { modelId: string; options: Record<string, unknown> }> = {
+  research: {
+    modelId: '@cf/moonshotai/kimi-k2.6',
+    options: {
+      // kimi-k2.6 renamed enable_thinking → thinking; disable it to avoid the
+      // 8005 "Internal server error" that triggers when the backend tries to stream
+      // reasoning tokens through a path that isn't fully stable yet.
+      // Types still reflect k2.5 (enable_thinking); cast to send the k2.6 param name.
+      chat_template_kwargs: { thinking: false },
+    },
+  },
+  coding: {
+    modelId: '@cf/moonshotai/kimi-k2.7-code',
+    options: {},
+  },
+};
+
+function inferLane(servers: { name: string; server_url: string }[]): ModelLane {
+  const isCodingServer = (s: { name: string; server_url: string }) =>
+    /github/i.test(s.name) || /github/i.test(s.server_url);
+  return servers.some(isCodingServer) ? 'coding' : 'research';
+}
+
+interface ChatAgentState {
+  modelLane: ModelLane | 'auto';
+}
 
 function truncateToolResult(result: unknown): unknown {
   if (typeof result === 'string') {
@@ -34,12 +68,26 @@ function truncateToolResult(result: unknown): unknown {
   }
 }
 
-export class ChatAgent extends AIChatAgent<Env> {
+export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
   // Wait for any MCP connections that are still restoring after DO
   // hibernation before running the chat turn. Without this, getAITools()
   // can return tool *schemas* whose underlying transport isn't ready yet,
   // and the second-or-later tool call fails silently inside execute().
   waitForMcpConnections: boolean | { timeout: number } = { timeout: 10_000 };
+
+  initialState: ChatAgentState = { modelLane: 'auto' };
+
+  /**
+   * Manually pin the model lane for this session, overriding inference
+   * from attached MCP servers. Pass 'auto' to revert to inference.
+   */
+  @callable()
+  setModelLane(lane: ModelLane | 'auto'): void {
+    if (lane !== 'auto' && !(lane in MODEL_LANES)) {
+      throw new Error(`Invalid model lane: "${lane}"`);
+    }
+    this.setState({ modelLane: lane });
+  }
 
   /**
    * Connect to an MCP server by URL.
@@ -134,14 +182,11 @@ export class ChatAgent extends AIChatAgent<Env> {
         )
       : {};
 
+    const lane = this.state.modelLane === 'auto' ? inferLane(this.mcp.listServers()) : this.state.modelLane;
+    const { modelId, options } = MODEL_LANES[lane];
+
     const result = streamText({
-      model: workersai(DEFAULT_MODEL, {
-        // kimi-k2.6 renamed enable_thinking → thinking; disable it to avoid the
-        // 8005 "Internal server error" that triggers when the backend tries to stream
-        // reasoning tokens through a path that isn't fully stable yet.
-        // Types still reflect k2.5 (enable_thinking); cast to send the k2.6 param name.
-        chat_template_kwargs: { thinking: false } as Record<string, unknown>,
-      }),
+      model: workersai(modelId, options),
       system: this.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
       messages: await convertToModelMessages(this.messages),
       // stopWhen must be set whenever tools are even *possible*, otherwise
