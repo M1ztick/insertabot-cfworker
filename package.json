@@ -1,6 +1,6 @@
 {
   "name": "insertabot-cfworker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,22 +8,30 @@
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "build": "wrangler deploy --dry-run --outdir=dist",
-    "types": "wrangler types"
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260708.1",
-    "esbuild": "^0.25.0",
-    "typescript": "^5.8.0",
-    "wrangler": "^4.108.0"
+    "@types/node": "^26.1.2",
+    "esbuild": "^0.28.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.118.0"
   },
   "overrides": {
-    "ws": ">=8.21.0"
+    "ws": ">=8.21.0",
+    "undici": ">=6.27.1",
+    "sharp": ">=0.35.0",
+    "fast-uri": ">=3.1.4",
+    "@hono/node-server": ">=2.0.5"
   },
   "dependencies": {
-    "@cloudflare/ai-chat": "^0.9.3",
-    "agents": "^0.17.3",
-    "ai": "^6.0.176",
-    "workers-ai-provider": "^3.3.1",
+    "@cloudflare/ai-chat": "^0.10.1",
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "agents": "^0.20.1",
+    "ai": "^7.0.48",
+    "workers-ai-provider": "^4.0.0",
     "zod": "^4.4.3"
   }
 }
