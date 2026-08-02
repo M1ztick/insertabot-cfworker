@@ -3,7 +3,7 @@
 	"main": "src/index.ts",
 	"workers_dev": false,
 	"preview_urls": false,
-	"compatibility_date": "2026-03-02",
+	"compatibility_date": "2026-08-02",
 	"compatibility_flags": ["nodejs_compat"],
 	"routes": [
 		{
@@ -29,6 +29,9 @@
 	},
 	"assets": {
 		"directory": "./public",
+		"not_found_handling": "single-page-application",
+		"html_handling": "auto-trailing-slash",
+		"run_worker_first": false
 	},
 	"ai": {
 		"binding": "AI",
