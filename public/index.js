@@ -35,6 +35,20 @@ const IB_PARAMS = (function resolvePlanParams() {
 	return { plan, apiKey, features };
 })();
 
+// ── Anonymizer placeholder scrub (client-side safety net) ───────────────────
+// The worker already strips these from the stream (src/lib/sanitize.ts), but
+// older messages persisted before that fix — and any future model that leaks a
+// new variant — get cleaned here too.
+const PLACEHOLDER_RE = /[<[{]\s*\/?\s*(?:PRESIDIO|ANONYMI[SZ]ED)[A-Z0-9_\s-]*[>\]}]/gi;
+
+function stripPlaceholders(text) {
+	if (!text || !/PRESIDIO|ANONYMI[SZ]ED/i.test(text)) return text;
+	return text
+		.replace(PLACEHOLDER_RE, '')
+		.replace(/[ \t]{2,}/g, ' ')
+		.replace(/[ \t]+([,.;:!?])/g, '$1');
+}
+
 // ── Inline markdown renderer (no external deps, line-by-line) ─────────────────
 function renderMarkdown(text) {
 	const div = document.createElement('div');
@@ -51,7 +65,10 @@ function renderMarkdown(text) {
 			.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
 			.replace(/__(.+?)__/g, '<strong>$1</strong>')
 			.replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
-			.replace(/_([^_\n]+)_/g, '<em>$1</em>')
+			// Underscore emphasis only at word boundaries, matching CommonMark.
+			// Without the guards, identifiers like MY_CONST_NAME render as italics
+			// and look like garbled foreign text.
+			.replace(/(^|[\s(["'])_([^_\n]+)_(?=$|[\s)\]"'.,;:!?])/g, '$1<em>$2</em>')
 			.replace(/~~(.+?)~~/g, '<del>$1</del>')
 			.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 	}
@@ -309,9 +326,15 @@ function extractText(msg) {
 	return '';
 }
 
+/** Text for display: assistant output goes through the placeholder scrub. */
+function displayText(msg) {
+	const text = extractText(msg);
+	return msg.role === 'assistant' ? stripPlaceholders(text) : text;
+}
+
 function setBubbleContent(bubbleEl, msg) {
 	bubbleEl.innerHTML = '';
-	const text = extractText(msg);
+	const text = displayText(msg);
 	if (text) {
 		if (msg.role === 'assistant') {
 			bubbleEl.appendChild(renderMarkdown(text));
@@ -610,7 +633,7 @@ function scheduleRender() {
 		streaming.dirty = false;
 		const { bubbleEl, cursor, text } = streaming;
 		bubbleEl.innerHTML = '';
-		const content = renderMarkdown(text);
+		const content = renderMarkdown(stripPlaceholders(text));
 		bubbleEl.appendChild(content);
 		bubbleEl.appendChild(cursor);
 		scrollBottom();
@@ -635,7 +658,8 @@ function appendChunk(delta) {
 function finalizeStream() {
 	if (!streaming) return;
 	cancelAnimationFrame(renderFrame);
-	const { bubbleEl, cursor, text, id } = streaming;
+	const { bubbleEl, cursor, id } = streaming;
+	const text = stripPlaceholders(streaming.text);
 	if (bubbleEl.contains(cursor)) bubbleEl.removeChild(cursor);
 	bubbleEl.innerHTML = '';
 	bubbleEl.appendChild(renderMarkdown(text));
