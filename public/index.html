@@ -2,7 +2,12 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+		/>
+		<meta name="theme-color" content="#0e1320" />
+		<meta name="mobile-web-app-capable" content="yes" />
 		<title>InsertaBot</title>
 		<link
 			href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap"
@@ -38,6 +43,13 @@
 			}
 
 			body {
+				/* Dynamic viewport unit so the layout tracks the mobile browser's
+				   collapsing address bar instead of being clipped by it. */
+				block-size: 100dvh;
+				/* Stops iOS Safari from rubber-banding the whole page while the
+				   message list is being scrolled. */
+				overscroll-behavior: none;
+				-webkit-text-size-adjust: 100%;
 				font-family:
 					'Syne',
 					-apple-system,
@@ -86,6 +98,10 @@
 				letter-spacing: 0.12em;
 				text-transform: uppercase;
 				color: var(--text);
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				min-inline-size: 0;
 			}
 
 			.status {
@@ -96,6 +112,13 @@
 				font-family: 'Space Mono', monospace;
 				font-size: 0.72rem;
 				color: var(--text-muted);
+				min-inline-size: 0;
+			}
+
+			.status #status-text {
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
 			}
 
 			.dot {
@@ -166,6 +189,12 @@
 			.btn-ghost:hover {
 				border-color: var(--border-cyan);
 				color: var(--cyan);
+			}
+
+			.btn-ghost .btn-icon {
+				display: inline-block;
+				vertical-align: -1px;
+				margin-inline-end: 5px;
 			}
 
 			/* ── Messages ── */
@@ -855,6 +884,261 @@
 				border-radius: 8px;
 				border: 1px solid var(--border-cyan);
 			}
+
+			/* ════════════════════════════════════════════════════════════════
+			   Mobile / touch
+			   ════════════════════════════════════════════════════════════════ */
+
+			/* Respect the notch + home indicator on iOS (viewport-fit=cover). */
+			header {
+				padding-inline: max(20px, env(safe-area-inset-left))
+					max(20px, env(safe-area-inset-right));
+			}
+			.input-wrap {
+				padding-block-end: calc(14px + env(safe-area-inset-bottom));
+				padding-inline: max(16px, env(safe-area-inset-left))
+					max(16px, env(safe-area-inset-right));
+			}
+
+			/* Give every interactive control a ≥44px touch target and remove the
+			   grey tap flash Android/iOS add by default. */
+			@media (hover: none) and (pointer: coarse) {
+				button,
+				a,
+				input,
+				textarea {
+					-webkit-tap-highlight-color: transparent;
+				}
+				.btn-ghost,
+				.server-disconnect,
+				.addons-close {
+					min-block-size: 44px;
+					display: inline-flex;
+					align-items: center;
+					justify-content: center;
+				}
+				#addons-btn,
+				#new-chat {
+					min-inline-size: 44px;
+					min-block-size: 44px;
+				}
+				.preview-remove {
+					inline-size: 26px;
+					block-size: 26px;
+					font-size: 15px;
+					inset-block-start: -8px;
+					inset-inline-end: -8px;
+				}
+				/* Hover styles stick after a tap on touch devices — neutralise them. */
+				.btn-ghost:hover {
+					border-color: var(--border);
+					color: var(--text-muted);
+				}
+				button#send:not(:disabled):hover {
+					opacity: 1;
+					box-shadow: none;
+				}
+			}
+
+			@media (max-width: 720px) {
+				header {
+					/* Single compact row. The header previously laid out six
+					   non-shrinking items, so on a ~360px screen the total width
+					   exceeded the viewport and shoved the layout sideways —
+					   which is what clipped the send button off the right edge. */
+					gap: 6px;
+					padding: 6px 12px;
+					padding-inline: max(12px, env(safe-area-inset-left))
+						max(12px, env(safe-area-inset-right));
+				}
+				header h1 {
+					font-size: 0.78rem;
+					letter-spacing: 0.08em;
+					/* Never ellipsise the brand name — other header items give way. */
+					flex-shrink: 0;
+					overflow: visible;
+				}
+				header > svg {
+					inline-size: 20px;
+					block-size: 20px;
+				}
+				.plan-badge {
+					font-size: 0.58rem;
+					padding: 2px 6px;
+				}
+				.status {
+					font-size: 0.65rem;
+					gap: 5px;
+				}
+				/* Collapse the header buttons to icons — the labels are what
+				   made the row overflow. aria-label keeps them accessible. */
+				#addons-btn .btn-label,
+				#new-chat .btn-label {
+					display: none;
+				}
+				#addons-btn .btn-icon,
+				#new-chat .btn-icon {
+					margin-inline-end: 0;
+				}
+				#addons-btn,
+				#new-chat {
+					/* Square 44px touch target, sized by viewport width rather than
+					   the pointer:coarse query so it does not depend on the browser
+					   reporting a coarse pointer. */
+					inline-size: 44px;
+					block-size: 44px;
+					padding: 0;
+					flex-shrink: 0;
+					display: inline-flex;
+					align-items: center;
+					justify-content: center;
+				}
+				#addons-btn .btn-icon,
+				#new-chat .btn-icon {
+					inline-size: 16px;
+					block-size: 16px;
+				}
+
+				#messages {
+					padding: 16px 12px 8px;
+					gap: 14px;
+					/* Momentum scrolling + contain overscroll to the list. */
+					-webkit-overflow-scrolling: touch;
+					overscroll-behavior-y: contain;
+				}
+
+				.msg-row {
+					gap: 8px;
+				}
+				.avatar {
+					inline-size: 26px;
+					block-size: 26px;
+					font-size: 0.58rem;
+				}
+				.bubble {
+					/* Was calc(100% - 44px), which left very little room on a 360px
+					   screen. Narrower avatars buy the bubble ~8px back. */
+					max-inline-size: calc(100% - 34px);
+					font-size: 0.92rem;
+					padding: 10px 12px;
+				}
+				.msg-row.assistant .bubble {
+					padding: 12px 14px;
+				}
+
+				/* Long unbroken strings (URLs, tokens, identifiers) must not force
+				   the bubble wider than the screen. */
+				.bubble-content {
+					overflow-wrap: anywhere;
+				}
+				.bubble-content pre {
+					padding: 10px 12px;
+					font-size: 0.9em;
+				}
+				/* Tables scroll horizontally instead of stretching the layout. */
+				.bubble-content table {
+					display: block;
+					overflow-x: auto;
+					white-space: nowrap;
+				}
+
+				.empty-state h2 {
+					font-size: 1.1rem;
+				}
+				.empty-state p {
+					font-size: 0.85rem;
+					max-inline-size: 280px;
+				}
+
+				.input-wrap {
+					padding: 8px 12px;
+					padding-block-end: calc(10px + env(safe-area-inset-bottom));
+					padding-inline: max(12px, env(safe-area-inset-left))
+						max(12px, env(safe-area-inset-right));
+				}
+				.input-inner {
+					gap: 6px;
+				}
+				button#attach {
+					inline-size: 44px;
+					block-size: 44px;
+				}
+				textarea {
+					min-block-size: 44px;
+					max-block-size: 120px;
+					/* iOS zooms the page when a focused input is under 16px. */
+					font-size: 16px;
+					padding: 11px 12px;
+				}
+				button#send {
+					block-size: 44px;
+					/* Icon-only on narrow screens: the word "SEND" plus the attach
+					   button and textarea could not fit, which pushed the button
+					   past the right edge of the viewport. */
+					inline-size: 44px;
+					padding: 0;
+					font-size: 0;
+				}
+				button#send::after {
+					content: '➤';
+					font-size: 1rem;
+					line-height: 1;
+				}
+
+				/* Full-width slide-over sheet rather than a 320px desktop drawer. */
+				.addons-panel {
+					inline-size: 100%;
+					max-inline-size: 100%;
+				}
+				.addons-body {
+					padding: 16px;
+					padding-block-end: calc(16px + env(safe-area-inset-bottom));
+				}
+				.addons-field input {
+					font-size: 16px;
+					padding: 11px 12px;
+				}
+				.addons-connect-btn {
+					padding: 13px;
+				}
+			}
+
+			/* Header space priority on small screens. The brand name must never
+			   truncate, so the least important items are dropped first:
+			   plan badge → status label. The connection dot always stays. */
+			@media (max-width: 480px) {
+				.plan-badge {
+					display: none;
+				}
+			}
+			@media (max-width: 400px) {
+				.status #status-text {
+					display: none;
+				}
+			}
+
+			/* Landscape phones are short — reclaim vertical space. */
+			@media (max-height: 480px) and (orientation: landscape) {
+				header {
+					padding-block: 6px;
+				}
+				#messages {
+					padding-block-start: 10px;
+				}
+				.demo-banner {
+					display: none !important;
+				}
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				*,
+				*::before,
+				*::after {
+					animation-duration: 0.01ms !important;
+					animation-iteration-count: 1 !important;
+					transition-duration: 0.01ms !important;
+				}
+			}
 		</style>
 	</head>
 	<body>
@@ -881,15 +1165,20 @@
 				<div class="dot" id="dot"></div>
 				<span id="status-text">Connecting…</span>
 			</div>
-			<button class="btn-ghost" id="addons-btn" title="Add-ons &amp; integrations">
-				<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;margin-inline-end:5px">
+			<button class="btn-ghost" id="addons-btn" title="Add-ons &amp; integrations" aria-label="Add-ons and integrations">
+				<svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
 					<path d="M12 22v-5"/>
 					<path d="M9 8V2"/>
 					<path d="M15 8V2"/>
 					<path d="M18 8H6a2 2 0 0 0-2 2v3a7 7 0 0 0 14 0v-3a2 2 0 0 0-2-2z"/>
-				</svg>Add-ons
+				</svg><span class="btn-label">Add-ons</span>
 			</button>
-			<button class="btn-ghost" id="new-chat">New chat</button>
+			<button class="btn-ghost" id="new-chat" title="Start a new chat" aria-label="Start a new chat">
+				<svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M12 5v14"/>
+					<path d="M5 12h14"/>
+				</svg><span class="btn-label">New chat</span>
+			</button>
 		</header>
 
 		<div class="demo-banner" id="demo-banner">
