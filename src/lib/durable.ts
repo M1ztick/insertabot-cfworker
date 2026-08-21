@@ -179,14 +179,19 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
 	private cachedTools: Record<string, WrappedTool> | null = null;
 	private toolsDirty = true;
 
-	// Provider instance is stable per Durable Object because `this.env.AI` is stable.
-	private workersaiProvider = createWorkersAI({
-		binding: this.env.AI,
-		gateway: { id: 'insertabot-cfworker' },
-	});
+	private _workersaiProvider: ReturnType<typeof createWorkersAI> | null = null;
+	private get workersaiProvider(): ReturnType<typeof createWorkersAI> {
+		if (!this._workersaiProvider) {
+			this._workersaiProvider = createWorkersAI({
+				binding: this.env.AI,
+				gateway: { id: 'insertabot-cfworker' },
+			});
+		}
+		return this._workersaiProvider;
+	}
 
 	/** Accessor to this instance's isolated SQLite storage. */
-	private get sql(): SqlStorage {
+	private get db(): SqlStorage {
 		return this.ctx.storage.sql;
 	}
 
@@ -267,25 +272,25 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
 	/** Store a memory note in this conversation's SQLite database. */
 	@callable()
 	memoryAdd(category: string, content: string, source?: string): Memory {
-		return remember(this.sql, { category, content, source });
+		return remember(this.db, { category, content, source });
 	}
 
 	/** List memories for this conversation, optionally filtered by category. */
 	@callable()
 	memoryList(category?: string, limit?: number): Memory[] {
-		return listMemories(this.sql, category, limit);
+		return listMemories(this.db, category, limit);
 	}
 
 	/** Search this conversation's memories by content substring. */
 	@callable()
 	memorySearch(query: string, limit?: number): Memory[] {
-		return recall(this.sql, query, limit);
+		return recall(this.db, query, limit);
 	}
 
 	/** Delete a memory by id. Returns true if a row was removed. */
 	@callable()
 	memoryDelete(id: string): boolean {
-		return forget(this.sql, id);
+		return forget(this.db, id);
 	}
 
 	/** Build the wrapped tool set once, then cache until the tool set changes. */
@@ -328,7 +333,7 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
 	 */
 	private buildSystemPrompt(): string {
 		const base = `${this.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT}\n\n${IDENTITY_GUARD}`;
-		const memories = listMemories(this.sql, undefined, 20);
+		const memories = listMemories(this.db, undefined, 20);
 		if (memories.length === 0) return base;
 
 		const memoryBlock = memories
