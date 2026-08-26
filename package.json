@@ -25,13 +25,18 @@
     "@hono/node-server": ">=2.0.5"
   },
   "dependencies": {
-    "@cloudflare/ai-chat": "^0.10.1",
+    "@cloudflare/ai-chat": "^0.10.2",
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "agents": "^0.20.1",
-    "ai": "^7.0.48",
+    "ai": "^7.0.77",
     "workers-ai-provider": "^4.0.0",
     "zod": "^4.4.3"
+  },
+  "allowScripts": {
+    "core-js-pure@3.49.0": true,
+    "esbuild@0.28.1": true,
+    "workerd@1.20260730.1": true
   }
 }
