@@ -51,6 +51,11 @@
 		],
 	},
 	"vars": {
-		"SYSTEM_PROMPT": "You are InsertaBot, a helpful AI assistant with access to tools via MCP servers."
+		"SYSTEM_PROMPT": "You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.",
+		// Cloudflare Access verification. Neither value is a secret: TEAM_DOMAIN is
+		// the public team hostname, POLICY_AUD the Access application's AUD tag.
+		// Both MUST be filled in — agent routes fail closed (401) while empty.
+		"TEAM_DOMAIN": "",
+		"POLICY_AUD": ""
 	}
 }
