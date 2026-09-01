@@ -55,7 +55,7 @@
 		// Cloudflare Access verification. Neither value is a secret: TEAM_DOMAIN is
 		// the public team hostname, POLICY_AUD the Access application's AUD tag.
 		// Both MUST be filled in — agent routes fail closed (401) while empty.
-		"TEAM_DOMAIN": "",
-		"POLICY_AUD": ""
+		"TEAM_DOMAIN": "https://mistykmedia.cloudflareaccess.com",
+		"POLICY_AUD": "00dab7f7e7e5ab92065f7f0fe6089bfdf1c6f6d168c2fa29719c931670aa60fe"
 	}
 }

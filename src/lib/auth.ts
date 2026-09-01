@@ -45,6 +45,17 @@ export interface AuthEnv {
  * once per request. Keyed on the domain so a config change cannot be served by
  * a stale key set. `createRemoteJWKSet` handles its own refresh on rotation.
  */
+/**
+ * Access issues JWTs whose `iss` is exactly `https://<team>.cloudflareaccess.com`.
+ * A bare hostname breaks the JWKS URL, and a trailing slash breaks the issuer
+ * comparison — both surfacing as an opaque 401 against config that reads fine.
+ * Normalise rather than trust the shape of a hand-edited var.
+ */
+function normalizeTeamDomain(raw: string): string {
+	const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+	return withScheme.replace(/\/+$/, '');
+}
+
 const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 function keySet(teamDomain: string) {
 	let set = jwksCache.get(teamDomain);
@@ -105,10 +116,12 @@ export async function authenticate(request: Request, env: AuthEnv): Promise<Prin
 	const token = request.headers.get('cf-access-jwt-assertion');
 	if (!token) return null;
 
+	const teamDomain = normalizeTeamDomain(env.TEAM_DOMAIN);
+
 	let payload: AccessPayload;
 	try {
-		({ payload } = await jwtVerify<AccessPayload>(token, keySet(env.TEAM_DOMAIN), {
-			issuer: env.TEAM_DOMAIN,
+		({ payload } = await jwtVerify<AccessPayload>(token, keySet(teamDomain), {
+			issuer: teamDomain,
 			audience: env.POLICY_AUD,
 		}));
 	} catch (err) {
