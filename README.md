@@ -34,10 +34,17 @@ Workers AI binding (env.AI)    Kimi K2.6 (research) / Kimi K2.7-code (coding)
   `setModelLane('coding' | 'research' | 'auto')`.
 - **`src/lib/utils.ts`** — small shared helpers (CORS headers, JSON
   responses, error formatting).
-- **`public/`** — a dependency-free frontend: a hand-rolled Markdown
-  renderer, capped-retry WebSocket reconnection, client-side image
-  compression before upload, and an "Add-ons" panel for connecting/removing
-  MCP servers at runtime.
+- **`public/`** — a dependency-free frontend: capped-retry WebSocket
+  reconnection, client-side image compression before upload, and an
+  "Add-ons" panel for connecting/removing MCP servers at runtime.
+- **`public/markdown.js`** — the hand-rolled Markdown renderer, kept in its
+  own module so its escaping logic is unit-testable without a DOM. Output is
+  assigned via `innerHTML`, so `escHtml()` and `safeUrl()` are a security
+  boundary: model output is untrusted (MCP tool results flow straight into
+  it). `public/_headers` adds a CSP as defence in depth.
+- **`test/`** — Vitest unit tests. The two suites cover the code paths where a
+  silent regression is most costly: the streaming placeholder filter
+  (`sanitize.ts`) and the Markdown renderer's XSS defences.
 
 Tools are **not hard-coded** — anything the user connects through the
 Add-ons panel (`addServer(name, url, token?)`) becomes available to the model
@@ -45,15 +52,19 @@ automatically via `this.mcp.getAITools()`.
 
 ## Requirements
 
-- Node.js 22+ (AI SDK 7 requirement)
+- Node.js 22+ (AI SDK 7 requirement; enforced via `engines`)
 - A Cloudflare account with Workers AI enabled
 
 ## Setup
 
 ```bash
 npm install
-npm run types    # generates worker-configuration.d.ts from wrangler.jsonc — run again after editing bindings
 ```
+
+`worker-configuration.d.ts` is generated, not committed. `npm run typecheck`
+and `npm run build` both regenerate it first, so a fresh clone typechecks
+without any extra step. Run `npm run types` by hand after editing bindings in
+`wrangler.jsonc` if you want your editor to pick them up immediately.
 
 ## Local development
 
@@ -64,11 +75,14 @@ npm run dev       # wrangler dev — http://localhost:8787
 Open `public/index.html` in a browser pointed at that origin (or just hit the
 worker's dev URL directly — it serves the assets too).
 
-## Type checking & build
+## Type checking, tests & build
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run build        # wrangler deploy --dry-run --outdir=dist (bundle check, no deploy)
+npm run typecheck   # wrangler types && tsc --noEmit
+npm test            # vitest run
+npm run test:watch  # vitest (watch mode)
+npm run build       # wrangler deploy --dry-run --outdir=dist (bundle check, no deploy)
+npm run check       # all three, in order — run this before opening a PR
 ```
 
 ## Deploy
@@ -93,6 +107,18 @@ Deploys to the custom domain configured in `wrangler.jsonc`
 - This project's knowledge of Cloudflare Workers/Agents/AI SDK APIs can go
   stale fast — see `AGENTS.md` before touching bindings, MCP, or Durable
   Object code.
+- **`sanitize.ts` sits on the main text stream.** Any whitespace normalisation
+  there must stay local to a removed placeholder. A global whitespace collapse
+  looks harmless but flattens the indentation of every fenced code block the
+  model streams — and because the transform runs before `onFinish`, the
+  mangled text is what gets persisted. `test/sanitize.test.ts` guards this.
+- **`markdown.js` renders untrusted model output via `innerHTML`.** Escape
+  quotes as well as `&<>` (an `href` is built from a captured group), and keep
+  link targets behind `safeUrl()`'s scheme allowlist.
+- Known gaps not yet addressed: the PWA manifest and service worker are not
+  referenced from `index.html`, the DO SQLite memory store in
+  `src/lib/memory.ts` is not reachable from either the UI or the model, and
+  the client-side `?plan=` gating is cosmetic (the Worker never reads it).
 - Keep `src/index.ts` and `src/lib/durable.ts` as the source of truth for
   architecture; older design docs describing a REST `/v1/chat/completions`
   API with hard-coded Tavily/GitHub tools have been removed as they no

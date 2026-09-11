@@ -1,3 +1,6 @@
+import { renderMarkdown } from './markdown.js';
+import { stripPlaceholders } from './sanitize.js';
+
 // ── Config ──────────────────────────────────────────────────────────────────
 const EMPTY_TITLE = 'InsertaBot';
 const EMPTY_SUBTITLE =
@@ -34,179 +37,6 @@ const IB_PARAMS = (function resolvePlanParams() {
 
 	return { plan, apiKey, features };
 })();
-
-// ── Anonymizer placeholder scrub (client-side safety net) ───────────────────
-// The worker already strips these from the stream (src/lib/sanitize.ts), but
-// older messages persisted before that fix — and any future model that leaks a
-// new variant — get cleaned here too.
-const PLACEHOLDER_RE = /[<[{]\s*\/?\s*(?:PRESIDIO|ANONYMI[SZ]ED)[A-Z0-9_\s-]*[>\]}]/gi;
-
-function stripPlaceholders(text) {
-	if (!text || !/PRESIDIO|ANONYMI[SZ]ED/i.test(text)) return text;
-	return text
-		.replace(PLACEHOLDER_RE, '')
-		.replace(/[ \t]{2,}/g, ' ')
-		.replace(/[ \t]+([,.;:!?])/g, '$1');
-}
-
-// ── Inline markdown renderer (no external deps, line-by-line) ─────────────────
-function renderMarkdown(text) {
-	const div = document.createElement('div');
-	div.className = 'bubble-content';
-
-	function escHtml(s) {
-		return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-	}
-
-	function parseInline(s) {
-		return escHtml(s)
-			.replace(/`([^`]+)`/g, '<code>$1</code>')
-			.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-			.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-			.replace(/__(.+?)__/g, '<strong>$1</strong>')
-			.replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
-			// Underscore emphasis only at word boundaries, matching CommonMark.
-			// Without the guards, identifiers like MY_CONST_NAME render as italics
-			// and look like garbled foreign text.
-			.replace(/(^|[\s(["'])_([^_\n]+)_(?=$|[\s)\]"'.,;:!?])/g, '$1<em>$2</em>')
-			.replace(/~~(.+?)~~/g, '<del>$1</del>')
-			.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-	}
-
-	function flushPara(lines) {
-		if (!lines.length) return;
-		const p = document.createElement('p');
-		p.innerHTML = parseInline(lines.join(' '));
-		div.appendChild(p);
-	}
-
-	function flushList(items, ordered) {
-		if (!items.length) return;
-		const list = document.createElement(ordered ? 'ol' : 'ul');
-		for (const item of items) {
-			const li = document.createElement('li');
-			li.innerHTML = parseInline(item);
-			list.appendChild(li);
-		}
-		div.appendChild(list);
-	}
-
-	const lines = text.split('\n');
-	let i = 0;
-	let paraLines = [];
-	let listItems = [];
-	let listOrdered = false;
-
-	function commitPending() {
-		if (listItems.length) {
-			flushList(listItems, listOrdered);
-			listItems = [];
-		}
-		if (paraLines.length) {
-			flushPara(paraLines);
-			paraLines = [];
-		}
-	}
-
-	while (i < lines.length) {
-		const line = lines[i];
-
-		if (line.startsWith('```')) {
-			commitPending();
-			const pre = document.createElement('pre');
-			const code = document.createElement('code');
-			const codeLines = [];
-			i++;
-			while (i < lines.length && !lines[i].startsWith('```')) {
-				codeLines.push(escHtml(lines[i]));
-				i++;
-			}
-			code.innerHTML = codeLines.join('\n');
-			pre.appendChild(code);
-			div.appendChild(pre);
-			i++;
-			continue;
-		}
-
-		const hm = line.match(/^(#{1,3})\s+(.*)/);
-		if (hm) {
-			commitPending();
-			const el = document.createElement(`h${hm[1].length}`);
-			el.innerHTML = parseInline(hm[2]);
-			div.appendChild(el);
-			i++;
-			continue;
-		}
-
-		if (/^[-*_]{3,}\s*$/.test(line)) {
-			commitPending();
-			div.appendChild(document.createElement('hr'));
-			i++;
-			continue;
-		}
-
-		if (line.startsWith('> ')) {
-			commitPending();
-			const bq = document.createElement('blockquote');
-			const bqLines = [];
-			while (i < lines.length && lines[i].startsWith('> ')) {
-				bqLines.push(lines[i].slice(2));
-				i++;
-			}
-			bq.innerHTML = parseInline(bqLines.join(' '));
-			div.appendChild(bq);
-			continue;
-		}
-
-		if (line.trim() === '') {
-			commitPending();
-			i++;
-			continue;
-		}
-
-		const ulm = line.match(/^[-*+]\s+(.*)/);
-		if (ulm) {
-			if (paraLines.length) {
-				flushPara(paraLines);
-				paraLines = [];
-			}
-			if (listItems.length && listOrdered) {
-				flushList(listItems, true);
-				listItems = [];
-			}
-			listOrdered = false;
-			listItems.push(ulm[1]);
-			i++;
-			continue;
-		}
-
-		const olm = line.match(/^\d+\.\s+(.*)/);
-		if (olm) {
-			if (paraLines.length) {
-				flushPara(paraLines);
-				paraLines = [];
-			}
-			if (listItems.length && !listOrdered) {
-				flushList(listItems, false);
-				listItems = [];
-			}
-			listOrdered = true;
-			listItems.push(olm[1]);
-			i++;
-			continue;
-		}
-
-		if (listItems.length) {
-			flushList(listItems, listOrdered);
-			listItems = [];
-		}
-		paraLines.push(line);
-		i++;
-	}
-
-	commitPending();
-	return div;
-}
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────
 const msgList = document.getElementById('messages');
@@ -288,13 +118,6 @@ function setBusy(yes) {
 
 function scrollBottom() {
 	msgList.scrollTop = msgList.scrollHeight;
-}
-
-function esc(s) {
-	return String(s ?? '')
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
 }
 
 function addRow(role, id) {
