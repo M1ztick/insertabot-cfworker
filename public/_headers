@@ -7,12 +7,8 @@
   #     index.html and the few inline style writes in index.js. Note it is NOT
   #     granted to script-src, so injected markup still cannot run.
   #   - fonts.googleapis.com / fonts.gstatic.com back the webfont <link>.
-  #   - data: on img-src backs the compressed image previews and manifest icons.
+  #   - data:/blob: on img-src back the compressed image previews.
   #   - connect-src 'self' covers the same-origin WebSocket (ws: and wss:).
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-
-/service-worker.js
-  # The SW must never be served stale, or clients pin an old asset manifest.
-  Cache-Control: no-cache

@@ -16,7 +16,7 @@ const HEALTH_CACHE = Object.freeze({
 	version: VERSION,
 });
 
-function handleHealth(_request: Request, env: Env): Response {
+function handleHealth(request: Request, env: Env): Response {
 	return jsonResponse(
 		{
 			...HEALTH_CACHE,
@@ -27,17 +27,15 @@ function handleHealth(_request: Request, env: Env): Response {
 			},
 		},
 		200,
-		corsHeaders(),
+		corsHeaders(request.headers.get('Origin')),
 	);
 }
 
 function handleOptions(request: Request): Response {
-	const origin = request.headers.get('Origin') || '*';
 	return new Response(null, {
 		headers: {
-			...corsHeaders(origin),
+			...corsHeaders(request.headers.get('Origin')),
 			'Access-Control-Max-Age': '86400',
-			Vary: 'Origin',
 		},
 	});
 }
@@ -70,7 +68,7 @@ export default {
 				if (!principal) {
 					const denied = new Response('Unauthorized', {
 						status: 401,
-						headers: corsHeaders(),
+						headers: corsHeaders(request.headers.get('Origin')),
 					});
 					logResponse(denied, 'unauthenticated');
 					return denied;
@@ -115,7 +113,7 @@ export default {
 			const response = jsonResponse(
 				{ error: 'Internal Server Error', detail: message },
 				500,
-				corsHeaders(),
+				corsHeaders(request.headers.get('Origin')),
 			);
 			logResponse(response, 'error');
 			return response;
