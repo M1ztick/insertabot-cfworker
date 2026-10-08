@@ -32,6 +32,13 @@ Workers AI binding (env.AI)    Kimi K2.6 (research) / Kimi K2.7-code (coding)
   servers are connected (a GitHub-flavored server routes to the coding model;
   everything else uses the research model). Users can override the lane with
   `setModelLane('coding' | 'research' | 'auto')`.
+- **`src/lib/context.ts`** — bounds the conversation history replayed to the
+  model each turn. Full history always stays in Durable Object storage and is
+  what the UI renders; this only caps what the *model* sees, which otherwise
+  grew without limit — inflating cost quadratically and degrading answers as
+  the current question got buried under stale context. Windows `UIMessage`s
+  *before* `convertToModelMessages`, since conversion expands one tool call
+  into an `assistant` + `tool` pair that must not be split.
 - **`src/lib/utils.ts`** — small shared helpers (CORS headers, JSON
   responses, error formatting).
 - **`public/`** — a dependency-free frontend: capped-retry WebSocket
@@ -100,6 +107,7 @@ Deploys to the custom domain configured in `wrangler.jsonc`
 |---|---|---|
 | `SYSTEM_PROMPT` | `wrangler.jsonc` → `vars` | Override with `wrangler secret put SYSTEM_PROMPT` for a value that shouldn't be committed. |
 | Model lanes | `src/lib/durable.ts` → `MODEL_LANES` | Add/rename lanes and the heuristic in `inferLane()` here. |
+| Context window | `src/lib/context.ts` → `DEFAULT_CONTEXT_WINDOW` | `maxTokens` is the replayed-history budget; `minRecentMessages` is a floor so one huge message cannot starve the window; `maxMessages` is a hard cap. Raise `maxTokens` for longer recall at higher cost per turn. |
 | MCP servers | Runtime, via the Add-ons UI | Nothing to configure ahead of time — each browser session connects its own servers, persisted per Durable Object instance. |
 
 ## Notes for future changes
@@ -115,6 +123,15 @@ Deploys to the custom domain configured in `wrangler.jsonc`
 - **`markdown.js` renders untrusted model output via `innerHTML`.** Escape
   quotes as well as `&<>` (an `href` is built from a captured group), and keep
   link targets behind `safeUrl()`'s scheme allowlist.
+- **Window history before `convertToModelMessages`, never after.** Conversion
+  expands a single tool call into an `assistant` + `tool` message *pair*, so
+  slicing the converted list can orphan a `tool` result whose originating
+  tool-call is gone — which providers reject. `test/context.test.ts` asserts
+  every `tool` message is still preceded by an `assistant` one.
+- **Replaying the full history is not free.** Input tokens are re-billed every
+  turn, so an uncapped history costs quadratically in a long thread and buries
+  the current question under stale context. If recall needs to extend further
+  back, prefer summarising or retrieving over raising `maxTokens`.
 - Known gaps not yet addressed: the PWA manifest and service worker are not
   referenced from `index.html`, the DO SQLite memory store in
   `src/lib/memory.ts` is not reachable from either the UI or the model, and
