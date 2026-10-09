@@ -354,6 +354,7 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
 	 */
 	async onChatMessage(
 		onFinish: Parameters<AIChatAgent<Env>['onChatMessage']>[0],
+		chatOptions?: Parameters<AIChatAgent<Env>['onChatMessage']>[1],
 	) {
 		const tools = this.buildTools();
 		const hasTools = Object.keys(tools).length > 0;
@@ -392,6 +393,12 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
 			// from its pretraining corpus. Runs before onFinish, so persisted
 			// history is clean as well.
 			experimental_transform: stripAnonymizerPlaceholders(),
+			// Threads the stop button through to inference. A client cancel
+			// (`cf_agent_chat_request_cancel`) aborts this signal; without it
+			// the SDK only stops *relaying* the turn, and the model keeps
+			// generating — and keeps running tools — against a reader who has
+			// already walked away from the answer.
+			abortSignal: chatOptions?.abortSignal,
 			// stopWhen must be set whenever tools are even *possible*, otherwise
 			// ai@7 defaults to isStepCount(1) which terminates after the first
 			// tool-call step — that's why "the AI only works for a singular
