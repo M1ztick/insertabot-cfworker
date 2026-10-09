@@ -132,10 +132,22 @@ Deploys to the custom domain configured in `wrangler.jsonc`
   turn, so an uncapped history costs quadratically in a long thread and buries
   the current question under stale context. If recall needs to extend further
   back, prefer summarising or retrieving over raising `maxTokens`.
-- Known gaps not yet addressed: the PWA manifest and service worker are not
-  referenced from `index.html`, the DO SQLite memory store in
-  `src/lib/memory.ts` is not reachable from either the UI or the model, and
-  the client-side `?plan=` gating is cosmetic (the Worker never reads it).
+- **CORS is an allowlist** (`src/lib/utils.ts` → `ALLOWED_ORIGINS`), not a
+  reflection of the caller's `Origin`. Add new browser origins there. Native
+  clients send no `Origin` and never consult CORS, so this governs browsers
+  only.
+- There is no PWA. `manifest.json` and `service-worker.js` were removed —
+  they were never referenced from `index.html`, and the Android app is a
+  native Jetpack Compose client that talks to `/agents/*` over OkHttp rather
+  than loading this HTML, so nothing consumed them.
+- Known gaps not yet addressed: the DO SQLite memory store in
+  `src/lib/memory.ts` is not reachable from the UI or the model (its
+  `@callable()` RPCs remain part of the WebSocket API surface, so confirm no
+  native client calls them before removing it); `pruneMemories` always
+  returns `0` and `forget()` reports false positives; the web client and the
+  Android app generate independent `instanceId`s and therefore hold separate
+  conversations; and the client-side `?plan=` gating is cosmetic (the Worker
+  never reads it).
 - Keep `src/index.ts` and `src/lib/durable.ts` as the source of truth for
   architecture; older design docs describing a REST `/v1/chat/completions`
   API with hard-coded Tavily/GitHub tools have been removed as they no
