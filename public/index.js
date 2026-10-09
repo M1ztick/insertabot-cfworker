@@ -72,6 +72,12 @@ let messages = [];
 let pendingImages = [];
 let streaming = null;
 let busy = false;
+// Id of the turn in flight — what a cancel has to be addressed to.
+let activeRequestId = null;
+// The turn the reader stopped. Its frames are dropped from here on: chunks
+// already in flight when the cancel lands would otherwise keep appending to
+// a bubble the reader has already closed.
+let cancelledRequestId = null;
 let ws = null;
 let retryDelay = 1000;
 let retryCount = 0;
@@ -104,16 +110,20 @@ function setConnected(yes) {
 	dot.className = 'dot' + (yes ? ' on' : '');
 	statusTxt.textContent = yes ? 'Connected' : 'Reconnecting…';
 	inputEl.disabled = !yes || busy;
-	sendBtn.disabled = !yes || busy;
+	sendBtn.disabled = !yes;
 	attachBtn.disabled = !yes || busy;
 	reconnectBtn.style.display = yes || retryCount < MAX_RETRIES ? 'none' : '';
 }
 
 function setBusy(yes) {
 	busy = yes;
+	if (!yes) activeRequestId = null;
 	inputEl.disabled = yes;
-	sendBtn.disabled = yes;
 	attachBtn.disabled = yes;
+	// The same button sends and stops, so it stays enabled while a turn runs.
+	sendBtn.classList.toggle('stop', yes);
+	sendBtn.textContent = yes ? 'Stop' : 'Send';
+	sendBtn.setAttribute('aria-label', yes ? 'Stop generating' : 'Send');
 }
 
 function scrollBottom() {
@@ -586,6 +596,7 @@ function onAgentMessage(data) {
 
 		case 'cf_agent_use_chat_response': {
 			const { body, done, id: reqId } = data;
+			if (reqId && reqId === cancelledRequestId) break;
 
 			if (body) {
 				let chunk;
@@ -674,17 +685,42 @@ function send() {
 	inputEl.value = '';
 	inputEl.style.height = 'auto';
 	setBusy(true);
+	activeRequestId = crypto.randomUUID();
+	cancelledRequestId = null;
 
 	ws.send(
 		JSON.stringify({
 			type: 'cf_agent_use_chat_request',
-			id: crypto.randomUUID(),
+			id: activeRequestId,
 			init: {
 				method: 'POST',
 				body: JSON.stringify({ messages, trigger: 'submit-message' }),
 			},
 		}),
 	);
+}
+
+// ── Stopping ─────────────────────────────────────────────────────────────────
+/**
+ * Aborts the turn in flight. The agent breaks out of its send loop *without*
+ * broadcasting a terminal `done` frame, so this ends the local streaming state
+ * itself — waiting for a finish that never comes would leave the UI busy.
+ * Mirrors ChatViewModel.stop() in insertabot-android.
+ */
+function stop() {
+	const requestId = activeRequestId;
+	if (!requestId) return;
+	cancelledRequestId = requestId;
+	if (ws && ws.readyState === WebSocket.OPEN) {
+		ws.send(JSON.stringify({ type: 'cf_agent_chat_request_cancel', id: requestId }));
+	}
+	if (streaming) {
+		streaming.text += '\n\n_[Stopped]_';
+		finalizeStream();
+	} else {
+		// Stopped before the first token: an empty bubble is worse than none.
+		setBusy(false);
+	}
 }
 
 // ── Input events ───────────────────────────────────────────────────────────
@@ -700,7 +736,7 @@ inputEl.addEventListener('keydown', (e) => {
 	}
 });
 
-sendBtn.addEventListener('click', send);
+sendBtn.addEventListener('click', () => (busy ? stop() : send()));
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 (function applyPlanUI() {

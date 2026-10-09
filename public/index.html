@@ -621,6 +621,13 @@
 				opacity: 0.85;
 				box-shadow: 0 0 16px rgba(0, 245, 212, 0.3);
 			}
+			button#send.stop {
+				background: var(--magenta);
+				color: var(--text);
+			}
+			button#send.stop:not(:disabled):hover {
+				box-shadow: 0 0 16px rgba(245, 0, 160, 0.3);
+			}
 
 			/* ── Add-ons panel ── */
 			.addons-backdrop {
@@ -934,7 +941,8 @@
 					border-color: var(--border);
 					color: var(--text-muted);
 				}
-				button#send:not(:disabled):hover {
+				button#send:not(:disabled):hover,
+				button#send.stop:not(:disabled):hover {
 					opacity: 1;
 					box-shadow: none;
 				}
@@ -1083,6 +1091,9 @@
 					content: '➤';
 					font-size: 1rem;
 					line-height: 1;
+				}
+				button#send.stop::after {
+					content: '■';
 				}
 
 				/* Full-width slide-over sheet rather than a 320px desktop drawer. */
