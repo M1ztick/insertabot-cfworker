@@ -39,6 +39,14 @@ Workers AI binding (env.AI)    Kimi K2.6 (research) / Kimi K2.7-code (coding)
   the current question got buried under stale context. Windows `UIMessage`s
   *before* `convertToModelMessages`, since conversion expands one tool call
   into an `assistant` + `tool` pair that must not be split.
+- **`src/lib/conversations.ts`** + **`src/lib/api.ts`** — the cross-device
+  conversation list, stored in **D1** (`DB` binding). Message bodies stay in
+  each ChatAgent Durable Object; D1 holds one index row per conversation
+  (title, preview, count, timestamps) keyed by the verified owner, so the web
+  client and the Android app can list, resume, rename and delete the same
+  threads. `ChatAgent.persistMessages` keeps the row current (off the hot path,
+  via `waitUntil`), and `onConnect` pushes the stored transcript to every newly
+  connected client so reopening a thread on another device shows its history.
 - **`src/lib/utils.ts`** — small shared helpers (CORS headers, JSON
   responses, error formatting).
 - **`public/`** — a dependency-free frontend: capped-retry WebSocket
@@ -98,6 +106,39 @@ npm run check       # all three, in order — run this before opening a PR
 npm run deploy
 ```
 
+On first deploy, wrangler auto-provisions the `insertabot-conversations` D1
+database, and the Worker creates its table on first use (`npm run
+db:migrate:remote` applies `migrations/` explicitly). Pin the resulting
+`database_id` in `wrangler.jsonc` afterwards.
+
+### Conversation API (shared by web + Android)
+
+All routes require the same Cloudflare Access auth as `/agents/*` and are
+scoped to the caller. `GET /health` reports `features.conversations: true`
+when the index is available.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/conversations?limit=30&cursor=` | `{ conversations: [{id,title,preview,messageCount,createdAt,updatedAt}], nextCursor }`, newest first |
+| `GET` | `/api/conversations/:id` | one entry |
+| `PATCH` | `/api/conversations/:id` | `{"title": "..."}`, which pins the title against auto-titling |
+| `DELETE` | `/api/conversations/:id` | wipes the Durable Object (messages, MCP, memory) and the index row |
+
+To open a conversation, connect the WebSocket to `/agents/chat-agent/:id` as
+before. The agent sends `cf_agent_chat_messages` with the full transcript on
+connect.
+
+### One identity across web and Android
+
+Browsers resolve to the user's email, while the Android app's Access service
+token resolves to `svc:<clientId>`. Those are **different owners**, so the two
+see separate conversation lists unless the token is linked:
+
+```bash
+npx wrangler secret put SERVICE_TOKEN_OWNERS
+# {"<service-token-client-id>.access": "you@example.com"}
+```
+
 Deploys to the custom domain configured in `wrangler.jsonc`
 (`cfworker.insertabot.io`).
 
@@ -144,9 +185,7 @@ Deploys to the custom domain configured in `wrangler.jsonc`
   `src/lib/memory.ts` is not reachable from the UI or the model (its
   `@callable()` RPCs remain part of the WebSocket API surface, so confirm no
   native client calls them before removing it); `pruneMemories` always
-  returns `0` and `forget()` reports false positives; the web client and the
-  Android app generate independent `instanceId`s and therefore hold separate
-  conversations; and the client-side `?plan=` gating is cosmetic (the Worker
+  returns `0` and `forget()` reports false positives; and the client-side `?plan=` gating is cosmetic (the Worker
   never reads it).
 - Keep `src/index.ts` and `src/lib/durable.ts` as the source of truth for
   architecture; older design docs describing a REST `/v1/chat/completions`

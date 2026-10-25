@@ -12,6 +12,7 @@ const MAX_IMAGE_DIMENSION = 1024;
 const MAX_IMAGE_QUALITY = 0.85;
 const MAX_PENDING_IMAGES = 4;
 const RPC_TIMEOUT_MS = 15000;
+const HISTORY_PAGE_SIZE = 30;
 
 // ── Plan + API key resolution ───────────────────────────────────────────────
 // Priority: URL param ?plan= / ?key= → <meta> tags → demo defaults.
@@ -62,11 +63,16 @@ reconnectBtn.addEventListener('click', () => {
 });
 
 // ── Session / state ─────────────────────────────────────────────────────────
-let instanceId = localStorage.getItem('ib_instance');
-if (!instanceId) {
-	instanceId = crypto.randomUUID();
-	localStorage.setItem('ib_instance', instanceId);
-}
+// `?c=<id>` opens a specific conversation (a link to one of your own threads);
+// otherwise resume the last one this browser had open.
+const CONVERSATION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+let instanceId = (() => {
+	const fromUrl = new URLSearchParams(location.search).get('c');
+	if (fromUrl && CONVERSATION_ID_RE.test(fromUrl)) return fromUrl;
+	const stored = localStorage.getItem('ib_instance');
+	return stored && CONVERSATION_ID_RE.test(stored) ? stored : crypto.randomUUID();
+})();
+localStorage.setItem('ib_instance', instanceId);
 
 let messages = [];
 let pendingImages = [];
@@ -82,6 +88,11 @@ let ws = null;
 let retryDelay = 1000;
 let retryCount = 0;
 let addonsOpen = false;
+let historyOpen = false;
+/** Set once /health reports the Worker has a conversation index. */
+let historyAvailable = false;
+let historyCursor = null;
+let historyItems = [];
 const pendingRpc = new Map();
 let renderFrame = 0;
 
@@ -510,18 +521,216 @@ function finalizeStream() {
 }
 
 // ── New conversation ─────────────────────────────────────────────────────────
-function newConversation() {
+/**
+ * Point the client at conversation `id`. The conversation id names the
+ * Durable Object, so this is a reconnect: the old socket is detached first
+ * (so its close does not trigger a retry against the old id) and the agent
+ * sends the stored transcript once the new one opens.
+ */
+function openConversation(id) {
 	if (streaming) finalizeStream();
+	setBusy(false);
 	messages = [];
 	pendingImages = [];
 	updatePreviewStrip();
-	instanceId = crypto.randomUUID();
+	instanceId = id;
 	localStorage.setItem('ib_instance', instanceId);
+	syncUrl();
 	renderAll();
-	if (ws) ws.close();
+	if (ws) {
+		const old = ws;
+		ws = null;
+		old.onclose = null;
+		old.onerror = null;
+		old.onmessage = null;
+		old.close();
+	}
+	retryCount = 0;
+	retryDelay = 1000;
+	connect();
+	renderHistory();
+}
+
+function newConversation() {
+	openConversation(crypto.randomUUID());
+}
+
+/** Keep `?c=` in step without adding a history entry for every switch. */
+function syncUrl() {
+	const url = new URL(location.href);
+	if (url.searchParams.get('c') === instanceId) return;
+	url.searchParams.set('c', instanceId);
+	history.replaceState(null, '', url);
 }
 
 newChatBtn.addEventListener('click', newConversation);
+
+// ── Conversation history (D1 index, shared with the Android app) ───────────────
+async function api(path, init = {}) {
+	const res = await fetch(path, {
+		...init,
+		credentials: 'same-origin',
+		headers: { Accept: 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
+	});
+	if (res.status === 204) return null;
+	const body = await res.json().catch(() => ({}));
+	if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+	return body;
+}
+
+function relativeTime(ms) {
+	const min = Math.round((Date.now() - ms) / 60000);
+	if (min < 1) return 'just now';
+	if (min < 60) return `${min}m ago`;
+	const hr = Math.round(min / 60);
+	if (hr < 24) return `${hr}h ago`;
+	const day = Math.round(hr / 24);
+	if (day < 7) return `${day}d ago`;
+	return new Date(ms).toLocaleDateString();
+}
+
+function historyNotice(text) {
+	const list = document.getElementById('history-list');
+	list.innerHTML = '';
+	const p = document.createElement('p');
+	p.className = 'addons-empty';
+	p.textContent = text;
+	list.appendChild(p);
+}
+
+async function loadHistory({ append = false } = {}) {
+	if (!historyAvailable) return;
+	const params = new URLSearchParams({ limit: String(HISTORY_PAGE_SIZE) });
+	if (append && historyCursor) params.set('cursor', historyCursor);
+	try {
+		const page = await api(`/api/conversations?${params}`);
+		historyItems = append ? historyItems.concat(page.conversations) : page.conversations;
+		historyCursor = page.nextCursor;
+		renderHistory();
+	} catch (e) {
+		historyNotice(`Couldn't load conversations: ${e.message}`);
+	}
+}
+
+async function renameConversation(c) {
+	const next = prompt('Rename conversation', c.title);
+	if (!next || !next.trim() || next.trim() === c.title) return;
+	try {
+		const updated = await api(`/api/conversations/${encodeURIComponent(c.id)}`, {
+			method: 'PATCH',
+			body: JSON.stringify({ title: next }),
+		});
+		Object.assign(c, updated);
+		renderHistory();
+	} catch (err) {
+		alert(`Rename failed: ${err.message}`);
+	}
+}
+
+async function deleteConversation(c, button) {
+	if (!confirm(`Delete “${c.title}”? This removes it on every device and cannot be undone.`)) return;
+	button.disabled = true;
+	try {
+		// Leave the thread first so the open socket is not holding the
+		// Durable Object (or re-creating it) while it is deleted.
+		if (c.id === instanceId) newConversation();
+		await api(`/api/conversations/${encodeURIComponent(c.id)}`, { method: 'DELETE' });
+		historyItems = historyItems.filter((x) => x.id !== c.id);
+		renderHistory();
+	} catch (err) {
+		button.disabled = false;
+		alert(`Delete failed: ${err.message}`);
+	}
+}
+
+function historyAction(label, glyph, className, onClick) {
+	const btn = document.createElement('button');
+	btn.className = className;
+	btn.title = label;
+	btn.setAttribute('aria-label', label);
+	btn.textContent = glyph;
+	btn.addEventListener('click', (e) => {
+		e.stopPropagation();
+		onClick(btn);
+	});
+	return btn;
+}
+
+function renderHistory() {
+	const list = document.getElementById('history-list');
+	if (!list) return;
+	if (historyItems.length === 0) {
+		historyNotice('No conversations yet. Send a message to start one.');
+		return;
+	}
+	list.innerHTML = '';
+	for (const c of historyItems) {
+		const item = document.createElement('div');
+		item.className = 'history-item' + (c.id === instanceId ? ' active' : '');
+		item.tabIndex = 0;
+		item.setAttribute('role', 'button');
+
+		// textContent throughout: titles and previews are user/model text.
+		const main = document.createElement('div');
+		main.className = 'history-main';
+		const title = document.createElement('div');
+		title.className = 'history-title';
+		title.textContent = c.title;
+		const preview = document.createElement('div');
+		preview.className = 'history-preview';
+		preview.textContent = stripPlaceholders(c.preview);
+		const meta = document.createElement('div');
+		meta.className = 'history-meta';
+		meta.textContent = `${relativeTime(c.updatedAt)} · ${c.messageCount} msg${c.messageCount === 1 ? '' : 's'}`;
+		main.append(title, preview, meta);
+
+		const choose = () => {
+			if (c.id !== instanceId) openConversation(c.id);
+			toggleHistory(false);
+		};
+		item.addEventListener('click', choose);
+		item.addEventListener('keydown', (e) => {
+			if (e.target === item && (e.key === 'Enter' || e.key === ' ')) {
+				e.preventDefault();
+				choose();
+			}
+		});
+
+		item.append(
+			main,
+			historyAction(`Rename ${c.title}`, '✎', 'history-action', () => renameConversation(c)),
+			historyAction(`Delete ${c.title}`, '✕', 'history-action danger', (btn) => deleteConversation(c, btn)),
+		);
+		list.appendChild(item);
+	}
+	if (historyCursor) {
+		const more = document.createElement('button');
+		more.className = 'btn-ghost history-more';
+		more.textContent = 'Load more';
+		more.addEventListener('click', () => loadHistory({ append: true }));
+		list.appendChild(more);
+	}
+}
+
+function toggleHistory(force) {
+	historyOpen = typeof force === 'boolean' ? force : !historyOpen;
+	document.getElementById('history-backdrop').classList.toggle('open', historyOpen);
+	document.getElementById('history-panel').classList.toggle('open', historyOpen);
+	// Refresh on open: the list may have changed on another device.
+	if (historyOpen) loadHistory();
+}
+
+/** Show the Chats button only when the Worker has an index to list. */
+async function detectHistory() {
+	try {
+		const res = await fetch('/health', { credentials: 'same-origin' });
+		const health = await res.json();
+		historyAvailable = !!health?.features?.conversations;
+	} catch {
+		historyAvailable = false;
+	}
+	document.getElementById('history-btn').hidden = !historyAvailable;
+}
 
 // ── WebSocket (with capped retries) ───────────────────────────────────────────
 function connect() {
@@ -535,7 +744,10 @@ function connect() {
 
 	const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 	const keyParam = IB_PARAMS.apiKey ? `?ib_key=${encodeURIComponent(IB_PARAMS.apiKey)}` : '';
-	ws = new WebSocket(`${proto}//${location.host}/agents/chat-agent/${instanceId}${keyParam}`);
+	const socket = new WebSocket(
+		`${proto}//${location.host}/agents/chat-agent/${encodeURIComponent(instanceId)}${keyParam}`,
+	);
+	ws = socket;
 
 	ws.onopen = () => {
 		retryCount = 0;
@@ -544,6 +756,8 @@ function connect() {
 	};
 
 	ws.onclose = () => {
+		// A socket replaced by openConversation() must not schedule a retry.
+		if (ws !== socket) return;
 		setConnected(false);
 		finalizeStream();
 		setBusy(false);
@@ -558,7 +772,7 @@ function connect() {
 		retryDelay = Math.min(retryDelay * 2, MAX_RECONNECT_DELAY_MS);
 	};
 
-	ws.onerror = () => ws.close();
+	ws.onerror = () => socket.close();
 
 	ws.onmessage = (evt) => {
 		let data;
@@ -632,9 +846,11 @@ function onAgentMessage(data) {
 						finalizeStream();
 						break;
 					}
-					case 'finish':
-						finalizeStream();
-						break;
+						case 'finish':
+							finalizeStream();
+							// A new thread now has a title; an old one moved to the top.
+							if (historyOpen) loadHistory();
+							break;
 					case 'error':
 						if (!streaming) startStream(reqId);
 						streaming.text += `\n\n*[Error: ${chunk.errorText ?? chunk.error ?? 'unknown'}]*`;
@@ -767,6 +983,17 @@ sendBtn.addEventListener('click', () => (busy ? stop() : send()));
 	if (status) status.appendChild(reconnectBtn);
 })();
 
+document.getElementById('history-btn').addEventListener('click', () => toggleHistory());
+document.getElementById('history-close').addEventListener('click', () => toggleHistory(false));
+document.getElementById('history-backdrop').addEventListener('click', () => toggleHistory(false));
+document.getElementById('history-new').addEventListener('click', () => {
+	newConversation();
+	toggleHistory(false);
+});
+document.addEventListener('keydown', (e) => {
+	if (e.key === 'Escape' && historyOpen) toggleHistory(false);
+});
+
 document.getElementById('addons-btn').addEventListener('click', toggleAddons);
 document.getElementById('addons-close').addEventListener('click', toggleAddons);
 document.getElementById('addons-backdrop').addEventListener('click', toggleAddons);
@@ -776,4 +1003,6 @@ document.getElementById('addons-url').addEventListener('keydown', (e) => {
 });
 
 showEmpty();
+syncUrl();
 connect();
+detectHistory();

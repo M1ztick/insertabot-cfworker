@@ -12,7 +12,9 @@
     "typecheck": "npm run types && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm run test && npm run build"
+    "check": "npm run typecheck && npm run test && npm run build",
+    "db:migrate:local": "wrangler d1 migrations apply insertabot-conversations --local",
+    "db:migrate:remote": "wrangler d1 migrations apply insertabot-conversations --remote"
   },
   "engines": {
     "node": ">=22"
