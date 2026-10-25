@@ -655,6 +655,72 @@
 			}
 			.addons-panel.open { transform: translateX(0); }
 
+			/* ── History drawer (mirrors the Add-ons panel, from the other edge) ── */
+			#history-btn[hidden] { display: none !important; }
+			.addons-panel.history-panel {
+				inset-inline-end: auto;
+				inset-inline-start: 0;
+				border-inline-start: none;
+				border-inline-end: 1px solid var(--border);
+				transform: translateX(-100%);
+			}
+			.addons-panel.history-panel.open { transform: translateX(0); }
+			.history-panel .addons-body { gap: 8px; padding: 12px; }
+			.history-item {
+				display: flex;
+				align-items: flex-start;
+				gap: 6px;
+				padding: 10px 10px;
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				cursor: pointer;
+				transition: border-color 0.2s, background 0.2s;
+			}
+			.history-item:hover { border-color: var(--border-cyan); }
+			.history-item.active {
+				border-color: var(--border-cyan);
+				background: var(--accent-dim);
+			}
+			.history-main { flex: 1; min-inline-size: 0; }
+			.history-title {
+				font-size: 0.86rem;
+				color: var(--text);
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+			.history-preview {
+				font-size: 0.74rem;
+				color: var(--text-muted);
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				margin-block-start: 2px;
+			}
+			.history-meta {
+				font-family: 'Space Mono', monospace;
+				font-size: 0.62rem;
+				color: var(--text-muted);
+				opacity: 0.75;
+				margin-block-start: 4px;
+			}
+			.history-action {
+				background: none;
+				border: none;
+				color: var(--text-muted);
+				cursor: pointer;
+				font-size: 0.8rem;
+				padding: 2px 5px;
+				border-radius: 6px;
+				line-height: 1;
+			}
+			.history-action:hover { color: var(--cyan); }
+			.history-action.danger:hover { color: var(--magenta); }
+			.history-more {
+				margin-block-start: 6px;
+				align-self: center;
+			}
+
 			.addons-header {
 				display: flex;
 				align-items: center;
@@ -980,14 +1046,17 @@
 				}
 				/* Collapse the header buttons to icons — the labels are what
 				   made the row overflow. aria-label keeps them accessible. */
+				#history-btn .btn-label,
 				#addons-btn .btn-label,
 				#new-chat .btn-label {
 					display: none;
 				}
+				#history-btn .btn-icon,
 				#addons-btn .btn-icon,
 				#new-chat .btn-icon {
 					margin-inline-end: 0;
 				}
+				#history-btn,
 				#addons-btn,
 				#new-chat {
 					/* Square 44px touch target, sized by viewport width rather than
@@ -1097,6 +1166,7 @@
 				}
 
 				/* Full-width slide-over sheet rather than a 320px desktop drawer. */
+				.history-action { padding: 8px 10px; font-size: 1rem; }
 				.addons-panel {
 					inline-size: 100%;
 					max-inline-size: 100%;
@@ -1154,6 +1224,13 @@
 	</head>
 	<body>
 		<header>
+			<button class="btn-ghost" id="history-btn" title="Conversations" aria-label="Conversations" hidden>
+				<svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M3 6h18"/>
+					<path d="M3 12h18"/>
+					<path d="M3 18h18"/>
+				</svg><span class="btn-label">Chats</span>
+			</button>
 			<svg
 				width="22"
 				height="22"
@@ -1195,6 +1272,18 @@
 		<div class="demo-banner" id="demo-banner">
 			You're using the InsertaBot demo. <a href="https://insertabot.io" target="_blank" rel="noopener noreferrer">Visit insertabot.io</a> to pick a plan.
 		</div>
+
+		<div class="addons-backdrop" id="history-backdrop"></div>
+		<aside class="addons-panel history-panel" id="history-panel" aria-label="Conversations">
+			<div class="addons-header">
+				<span class="addons-title">Conversations</span>
+				<button class="btn-ghost" id="history-new" title="Start a new chat">+ New</button>
+				<button class="addons-close" id="history-close" aria-label="Close">✕</button>
+			</div>
+			<div class="addons-body" id="history-list">
+				<p class="addons-empty">No conversations yet.</p>
+			</div>
+		</aside>
 
 		<div class="addons-backdrop" id="addons-backdrop"></div>
 		<aside class="addons-panel" id="addons-panel" aria-label="Add-ons">

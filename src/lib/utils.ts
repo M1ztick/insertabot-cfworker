@@ -23,7 +23,7 @@ const LOCAL_ORIGIN_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?
 
 /** Headers shared by every CORS response, regardless of origin. */
 const BASE_CORS_HEADERS: Readonly<Record<string, string>> = Object.freeze({
-	'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+	'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 	'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 });
 

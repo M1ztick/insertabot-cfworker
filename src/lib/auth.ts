@@ -38,6 +38,18 @@ export interface AuthEnv {
 	TEAM_DOMAIN?: string;
 	/** The Access application's AUD tag. */
 	POLICY_AUD?: string;
+	/**
+	 * JSON object mapping an Access service token's Client ID to the email of
+	 * the person it belongs to, e.g. `{"abc123.access": "me@example.com"}`.
+	 * Set with `wrangler secret put SERVICE_TOKEN_OWNERS`.
+	 *
+	 * Browsers sign in interactively and resolve to their email; the Android
+	 * app cannot, and authenticates with a service token instead. Unlinked, the
+	 * two land in different owner namespaces, so the same person sees one set of
+	 * conversations on the web and a disjoint set on their phone. Linking the
+	 * token here folds both into the email's namespace.
+	 */
+	SERVICE_TOKEN_OWNERS?: string;
 }
 
 /**
@@ -76,14 +88,57 @@ function keySet(teamDomain: string) {
  * Resolve in this order, and treat a payload with none of the three as
  * unauthenticated.
  */
-function identityOf(payload: AccessPayload): { userId: string; isService: boolean } | null {
-	if (payload.common_name) return { userId: `svc:${payload.common_name}`, isService: true };
+function identityOf(
+	payload: AccessPayload,
+	links: ReadonlyMap<string, string> = EMPTY_LINKS,
+): { userId: string; isService: boolean } | null {
+	if (payload.common_name) {
+		// A linked token acts as its owner. The link is server-side config, so a
+		// token holder still cannot choose whose conversations it opens.
+		const email = links.get(payload.common_name);
+		if (email) return { userId: `usr:${email}`, isService: true };
+		return { userId: `svc:${payload.common_name}`, isService: true };
+	}
 	if (payload.email) return { userId: `usr:${payload.email.toLowerCase()}`, isService: false };
 	if (typeof payload.sub === 'string' && payload.sub.length > 0) {
 		return { userId: `sub:${payload.sub}`, isService: false };
 	}
 	return null;
 }
+
+const EMPTY_LINKS: ReadonlyMap<string, string> = new Map();
+const linkCache = new Map<string, ReadonlyMap<string, string>>();
+
+/**
+ * Parse SERVICE_TOKEN_OWNERS. Malformed config logs and links nothing — it
+ * must not take agent traffic down, and an unlinked token still works, it just
+ * keeps its own namespace. Emails are lowercased to match identityOf().
+ */
+export function parseServiceTokenOwners(raw: string | undefined): ReadonlyMap<string, string> {
+	if (!raw || !raw.trim()) return EMPTY_LINKS;
+	const cached = linkCache.get(raw);
+	if (cached) return cached;
+
+	const links = new Map<string, string>();
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+			throw new Error('expected a JSON object of { clientId: email }');
+		}
+		for (const [clientId, email] of Object.entries(parsed)) {
+			if (typeof email === 'string' && email.includes('@') && clientId.trim()) {
+				links.set(clientId.trim(), email.trim().toLowerCase());
+			}
+		}
+	} catch (err) {
+		console.error('[auth] SERVICE_TOKEN_OWNERS is not valid; ignoring it:', (err as Error).message);
+	}
+	linkCache.set(raw, links);
+	return links;
+}
+
+/** Exposed for tests; production code goes through authenticate(). */
+export const __identityOf = identityOf;
 
 /**
  * Durable Object names accept arbitrary strings, but these ids also travel in a
@@ -129,10 +184,21 @@ export async function authenticate(request: Request, env: AuthEnv): Promise<Prin
 		return null;
 	}
 
-	const identity = identityOf(payload);
+	const identity = identityOf(payload, parseServiceTokenOwners(env.SERVICE_TOKEN_OWNERS));
 	if (!identity) return null;
 
 	return { ...identity, owner: await digestOwner(identity.userId) };
+}
+
+/**
+ * Split a scoped Durable Object name back into its owner and conversation id.
+ * The ChatAgent uses this to learn whose index row it maintains — from its own
+ * name, which the Worker derived from a verified principal.
+ */
+export function parseScopedInstanceId(name: string): { owner: string; conversationId: string } | null {
+	const idx = name.indexOf(INSTANCE_SEPARATOR);
+	if (idx <= 0 || idx === name.length - 1) return null;
+	return { owner: name.slice(0, idx), conversationId: name.slice(idx + 1) };
 }
 
 /**
