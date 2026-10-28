@@ -86,7 +86,8 @@ export function recall(sql: SqlStorage, query: string, limit = 10): Memory[] {
 export function forget(sql: SqlStorage, id: string): boolean {
 	ensureMemorySchema(sql);
 	const cursor = sql.exec(`DELETE FROM memory WHERE id = ?`, id);
-	return cursor.rowsRead > 0 || cursor.rowsWritten > 0;
+	// rowsWritten is the canonical count of affected rows for a DELETE.
+	return cursor.rowsWritten > 0;
 }
 
 /** Delete old memories or cap total count. Useful for DO storage hygiene. */
@@ -98,17 +99,17 @@ export function pruneMemories(
 	let removed = 0;
 	if (maxAgeMs !== undefined) {
 		const cutoff = Date.now() - maxAgeMs;
-		removed += [...sql.exec(`DELETE FROM memory WHERE created_at < ?`, cutoff)].length;
+		const cursor = sql.exec(`DELETE FROM memory WHERE created_at < ?`, cutoff);
+		removed += cursor.rowsWritten;
 	}
 	if (maxCount !== undefined && maxCount > 0) {
-		removed += [
-			...sql.exec(
-				`DELETE FROM memory WHERE id NOT IN (
-					SELECT id FROM memory ORDER BY created_at DESC LIMIT ?
-				)`,
-				maxCount,
-			),
-		].length;
+		const cursor = sql.exec(
+			`DELETE FROM memory WHERE id NOT IN (
+				SELECT id FROM memory ORDER BY created_at DESC LIMIT ?
+			)`,
+			maxCount,
+		);
+		removed += cursor.rowsWritten;
 	}
 	return removed;
 }

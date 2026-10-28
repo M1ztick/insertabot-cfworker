@@ -16,6 +16,11 @@ const HISTORY_PAGE_SIZE = 30;
 
 // ── Plan + API key resolution ───────────────────────────────────────────────
 // Priority: URL param ?plan= / ?key= → <meta> tags → demo defaults.
+//
+// NOTE: ib_key is sent as a WebSocket URL query parameter but is NOT consumed
+// by the Worker (auth is handled via Cloudflare Access JWT). It remains here as
+// a placeholder for a future non-Access auth path; remove the connect() plumbing
+// too if that path is abandoned.
 const IB_PARAMS = (function resolvePlanParams() {
 	const params = new URLSearchParams(location.search);
 	const planMeta = document.querySelector('meta[name="ib-plan"]');

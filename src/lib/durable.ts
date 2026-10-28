@@ -164,11 +164,10 @@ function truncateToolResult(result: unknown): unknown {
 
 	if (text.length <= TOOL_RESULT_LIMIT) return result;
 
-	return {
-		truncated: true,
-		preview: text.slice(0, TOOL_RESULT_LIMIT),
-		message: 'Tool result truncated — response too large for model context',
-	};
+	// Return a truncated STRING the model can read, not an opaque object.
+	// An object like { truncated: true, preview: "…" } is a custom shape the
+	// model has never seen; it cannot act on content hidden in a `preview` field.
+	return `${text.slice(0, TOOL_RESULT_LIMIT)}\n\n…[truncated — ${text.length} chars total, too large for model context. The first ${TOOL_RESULT_LIMIT} chars are shown above.]`;
 }
 
 export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
