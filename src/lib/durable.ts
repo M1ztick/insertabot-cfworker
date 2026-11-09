@@ -120,18 +120,18 @@ interface ServerInfo {
 	server_url: string;
 }
 
+// Kimi K2.6 / K2.7 Code are retired by Cloudflare on 2026-11-20 (requests return
+// 410 / error 5028). Replacements below are Cloudflare's recommended successors;
+// verify tool-calling behaviour against your MCP servers before relying on them.
 const MODEL_LANES: Record<ModelLane, { modelId: string; options: Record<string, unknown> }> = {
 	research: {
-		modelId: '@cf/moonshotai/kimi-k2.6',
-		options: {
-			// kimi-k2.6 renamed enable_thinking → thinking; disable it to avoid the
-			// 8005 "Internal server error" that triggers when the backend tries to stream
-			// reasoning tokens through a path that isn't fully stable yet.
-			chat_template_kwargs: { thinking: false },
-		},
+		modelId: '@cf/zai-org/glm-5.3',
+		// The Kimi-specific `chat_template_kwargs.thinking` flag was removed; add the
+		// equivalent option here if this model's docs call for one.
+		options: {},
 	},
 	coding: {
-		modelId: '@cf/moonshotai/kimi-k2.7-code',
+		modelId: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
 		options: {},
 	},
 };
