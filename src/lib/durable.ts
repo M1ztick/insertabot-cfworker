@@ -120,17 +120,15 @@ interface ServerInfo {
 	server_url: string;
 }
 
-// Kimi K2.6 / K2.7 Code are retired by Cloudflare on 2026-11-20 (requests return
-// 410 / error 5028). Replacements below are Cloudflare's recommended successors;
-// verify tool-calling behaviour against your MCP servers before relying on them.
+// Both Kimi K2 models deprecated Nov 2026 by Cloudflare Workers AI.
+// Replaced with DeepSeek V4.1 Flash — multimodal, 552B MoE, 1M context.
 const MODEL_LANES: Record<ModelLane, { modelId: string; options: Record<string, unknown> }> = {
 	research: {
-		modelId: '@cf/zai-org/glm-5.3',
-		// The Kimi-specific `chat_template_kwargs.thinking` flag was removed; add the
-		// equivalent option here if this model's docs call for one.
+		modelId: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
 		options: {},
 	},
 	coding: {
+		modelId: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
 		modelId: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
 		options: {},
 	},
