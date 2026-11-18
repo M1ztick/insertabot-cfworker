@@ -129,7 +129,6 @@ const MODEL_LANES: Record<ModelLane, { modelId: string; options: Record<string, 
 	},
 	coding: {
 		modelId: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
-		modelId: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
 		options: {},
 	},
 };
