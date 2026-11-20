@@ -57,13 +57,15 @@ export interface ContextWindowOptions {
 }
 
 export const DEFAULT_CONTEXT_WINDOW: Required<ContextWindowOptions> = {
-	// Kimi K2.x advertises a large window, but usable quality falls off well
-	// before the documented ceiling, and input tokens are the dominant cost
-	// here. ~24k characters-worth of budget keeps a long, useful window while
-	// bounding spend per turn.
-	maxTokens: 6_000,
+	// Sized for DeepSeek V4.1 Flash (1M-token window). The old 6k budget was
+	// set for Kimi K2.x, where input cost dominated; at that size a single
+	// large tool result (up to ~3k tokens, see TOOL_RESULT_LIMIT) crowded out
+	// most of the conversation. 32k keeps a long working memory while staying
+	// far below the range where long-context quality degrades, and with
+	// sessionAffinity most of it is billed at the cached-input rate.
+	maxTokens: 32_000,
 	minRecentMessages: 4,
-	maxMessages: 40,
+	maxMessages: 80,
 };
 
 /** Rough chars-per-token ratio for English prose and code. */
@@ -86,7 +88,7 @@ function textOf(value: unknown): string {
 /**
  * Estimate the token cost of a single message.
  *
- * An estimate is the right tool here: a real tokenizer for Kimi is not
+ * An estimate is the right tool here: a real tokenizer for the model is not
  * available in the Workers runtime, and the budget is a soft guard rail rather
  * than a hard provider limit. Over-estimating slightly is the safe direction.
  */

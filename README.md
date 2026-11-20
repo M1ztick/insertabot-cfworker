@@ -16,7 +16,7 @@ src/index.ts                   Worker entry point (routing, health, CORS)
 src/lib/durable.ts             ChatAgent — Durable Object (extends AIChatAgent)
         │  streamText()
         ▼
-Workers AI binding (env.AI)    Kimi K2.6 (research) / Kimi K2.7-code (coding)
+Workers AI binding (env.AI)    DeepSeek V4.1 Flash (research: low reasoning / coding: high reasoning)
 ```
 
 - **`src/index.ts`** — thin `fetch` handler. Hands off to

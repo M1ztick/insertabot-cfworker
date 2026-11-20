@@ -10,7 +10,7 @@ import {
 	type TextStreamPart,
 	type ToolSet,
 } from 'ai';
-import { createWorkersAI } from 'workers-ai-provider';
+import { createAI, type AI, type ModelOptions, type WorkersAIModelId } from 'agents/models/ai-sdk';
 import { createPlaceholderFilter } from './sanitize';
 import { remember, listMemories, recall, forget, type Memory } from './memory';
 import { windowMessages, truncationNotice } from './context';
@@ -24,24 +24,15 @@ const DEFAULT_SYSTEM_PROMPT =
 	'You are InsertaBot, a helpful AI assistant with access to tools via MCP servers.';
 
 /**
- * Appended to whatever system prompt is configured. Kimi K2.x was pretrained on
- * a Presidio-scrubbed corpus and will otherwise substitute its own name with an
- * anonymizer placeholder such as `<PRESIDIO_ANONYMIZED_ENTITY_248>`. Naming the
- * assistant explicitly and forbidding the tokens removes most occurrences; the
- * stream filter below catches the rest.
- */
-const IDENTITY_GUARD = [
-	'',
-	'Your name is InsertaBot. When referring to yourself, always write "InsertaBot".',
-	'Never output placeholder or redaction tokens such as <PRESIDIO_ANONYMIZED_ENTITY_…>,',
-	'<ANONYMIZED_…>, [REDACTED] or similar. If you do not know a name, omit it or',
-	'describe it in plain words instead of emitting a placeholder token.',
-].join('\n');
-
-/**
  * Stream transform that removes anonymizer placeholders from `text-delta`
  * parts before they reach the UI stream (and before `onFinish` persists the
  * message, so chat history stays clean too).
+ *
+ * Originally needed for Kimi K2.x, which was pretrained on a Presidio-scrubbed
+ * corpus and leaked tokens like `<PRESIDIO_ANONYMIZED_ENTITY_248>`. The prompt
+ * instructions that suppressed them were removed with the move to DeepSeek;
+ * this filter stays as a cheap safety net, since it costs nothing per turn
+ * and protects against any future model with the same habit.
  *
  * Placeholders can straddle chunk boundaries, so the filter buffers a small
  * trailing fragment. `text-end` flushes it; `finish` is a safety net for
@@ -120,16 +111,22 @@ interface ServerInfo {
 	server_url: string;
 }
 
-// Both Kimi K2 models deprecated Nov 2026 by Cloudflare Workers AI.
-// Replaced with DeepSeek V4.1 Flash — multimodal, 552B MoE, 1M context.
-const MODEL_LANES: Record<ModelLane, { modelId: string; options: Record<string, unknown> }> = {
+// Both Kimi K2 models were deprecated by Cloudflare Workers AI in Nov 2026 and
+// replaced with DeepSeek V4.1 Flash (multimodal, 552B MoE, 1M context, function
+// calling). Both lanes share the model; they differ by reasoning effort.
+// DeepSeek defaults to "high" on every request, which is slow and costly for
+// lookups and chat, so the research lane turns it down. ("medium" is mapped to
+// "high" by this model, so the useful settings are low / high.)
+const DEEPSEEK_V4_1_FLASH: WorkersAIModelId = '@cf/deepseek-ai/deepseek-v4.1-flash-1017';
+
+const MODEL_LANES: Record<ModelLane, { modelId: WorkersAIModelId; options: ModelOptions }> = {
 	research: {
-		modelId: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
-		options: {},
+		modelId: DEEPSEEK_V4_1_FLASH,
+		options: { reasoningEffort: 'low' },
 	},
 	coding: {
-		modelId: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
-		options: {},
+		modelId: DEEPSEEK_V4_1_FLASH,
+		options: { reasoningEffort: 'high' },
 	},
 };
 
@@ -180,15 +177,16 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
 	private cachedTools: Record<string, WrappedTool> | null = null;
 	private toolsDirty = true;
 
-	private _workersaiProvider: ReturnType<typeof createWorkersAI> | null = null;
-	private get workersaiProvider(): ReturnType<typeof createWorkersAI> {
-		if (!this._workersaiProvider) {
-			this._workersaiProvider = createWorkersAI({
+	// agents/models/ai-sdk replaces the deprecated workers-ai-provider package.
+	private _aiProvider: AI | null = null;
+	private get aiProvider(): AI {
+		if (!this._aiProvider) {
+			this._aiProvider = createAI({
 				binding: this.env.AI,
 				gateway: { id: 'insertabot-cfworker' },
 			});
 		}
-		return this._workersaiProvider;
+		return this._aiProvider;
 	}
 
 	/** Accessor to this instance's isolated SQLite storage. */
@@ -429,7 +427,7 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
 	 * conversation instance.
 	 */
 	private buildSystemPrompt(droppedCount = 0): string {
-		let base = `${this.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT}\n\n${IDENTITY_GUARD}`;
+		let base = this.env.SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT;
 		if (droppedCount > 0) base += `\n${truncationNotice(droppedCount)}`;
 		const memories = listMemories(this.db, undefined, 20);
 		if (memories.length === 0) return base;
@@ -481,12 +479,14 @@ export class ChatAgent extends AIChatAgent<Env, ChatAgentState> {
 		});
 
 		const result = streamText({
-			model: this.workersaiProvider(modelId, options),
+			// sessionAffinity pins this conversation to one replica, so the
+			// replayed history hits the prefix cache (cached input is ~50x
+			// cheaper than fresh input on this model).
+			model: this.aiProvider(modelId, { ...options, sessionAffinity: this.name }),
 			system: this.buildSystemPrompt(droppedCount),
 			messages: modelMessages,
-			// Scrub Presidio-style anonymizer placeholders that Kimi K2.x leaks
-			// from its pretraining corpus. Runs before onFinish, so persisted
-			// history is clean as well.
+			// Safety net for anonymizer placeholders (see stripAnonymizerPlaceholders).
+			// Runs before onFinish, so persisted history is clean as well.
 			experimental_transform: stripAnonymizerPlaceholders(),
 			// Threads the stop button through to inference. A client cancel
 			// (`cf_agent_chat_request_cancel`) aborts this signal; without it
