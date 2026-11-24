@@ -715,6 +715,38 @@ function renderHistory() {
 		more.addEventListener('click', () => loadHistory({ append: true }));
 		list.appendChild(more);
 	}
+	// "Delete all my data": every thread, its messages, memories and add-ons.
+	const wipe = document.createElement('button');
+	wipe.className = 'btn-ghost history-more history-wipe';
+	wipe.textContent = 'Delete all conversations';
+	wipe.addEventListener('click', () => deleteAllConversations(wipe));
+	list.appendChild(wipe);
+}
+
+async function deleteAllConversations(button) {
+	const ok = confirm(
+		'Delete ALL your conversations?\n\nEvery conversation, its messages and its add-ons will be deleted on every device. This cannot be undone.',
+	);
+	if (!ok) return;
+	button.disabled = true;
+	button.textContent = 'Deleting…';
+	try {
+		// Off the current thread first, so the open socket does not hold (or
+		// re-create) a Durable Object that is being destroyed.
+		newConversation();
+		// The Worker deletes in batches and reports what is left.
+		for (let i = 0; i < 100; i++) {
+			const result = await api('/api/conversations?confirm=all', { method: 'DELETE' });
+			if (!result || !result.remaining) break;
+		}
+		historyItems = [];
+		historyCursor = null;
+		renderHistory();
+	} catch (err) {
+		button.disabled = false;
+		button.textContent = 'Delete all conversations';
+		alert(`Delete failed: ${err.message}`);
+	}
 }
 
 function toggleHistory(force) {
