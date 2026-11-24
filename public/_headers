@@ -6,11 +6,11 @@
   #   - 'unsafe-inline' on style-src is required by the inline <style> block in
   #     index.html and the few inline style writes in index.js. Note it is NOT
   #     granted to script-src, so injected markup still cannot run.
-  #   - fonts.googleapis.com / fonts.gstatic.com back the webfont <link>.
+  #   - Fonts are self-hosted under /fonts/, so no third-party font origins.
   #   - data:/blob: on img-src back the compressed image previews.
   #   - connect-src 'self' covers the same-origin WebSocket (ws: and wss:).
-  #   - static.cloudflareinsights.com + the sha256 hash allow the Cloudflare
-  #     observability beacon injected when wrangler.jsonc observability is on.
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-mZvlKhXu+krudjmN7K44v7fzmbsgDkX6TSiT4QuAeB0=' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
+  #   - No analytics: Cloudflare's Web Analytics beacon (static.cloudflareinsights.com)
+  #     is deliberately NOT allowed, so it cannot run even if enabled on the zone.
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

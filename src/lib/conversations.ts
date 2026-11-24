@@ -327,3 +327,23 @@ export async function deleteConversation(db: D1Database, owner: string, id: stri
 		.run();
 	return result.meta.changes > 0;
 }
+
+/**
+ * Up to [limit] of one owner's conversation ids, oldest first. Used by the
+ * "delete all my data" route, which works through them in bounded batches.
+ */
+export async function listConversationIds(db: D1Database, owner: string, limit: number): Promise<string[]> {
+	const { results } = await db
+		.prepare(`SELECT id FROM conversations WHERE owner = ?1 ORDER BY updated_at ASC, id ASC LIMIT ?2`)
+		.bind(owner, limit)
+		.all<{ id: string }>();
+	return (results ?? []).map((row) => row.id);
+}
+
+export async function countConversations(db: D1Database, owner: string): Promise<number> {
+	const row = await db
+		.prepare(`SELECT COUNT(*) AS n FROM conversations WHERE owner = ?1`)
+		.bind(owner)
+		.first<{ n: number }>();
+	return Number(row?.n ?? 0);
+}

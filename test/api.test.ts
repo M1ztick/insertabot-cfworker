@@ -12,7 +12,7 @@ vi.mock('agents', () => ({
 	}),
 }));
 
-const { handleApi, matchRoute, isApiRoute } = await import('../src/lib/api');
+const { handleApi, matchRoute, isApiRoute, DELETE_ALL_BATCH } = await import('../src/lib/api');
 const { ensureSchema, upsertConversation, summarize, getConversation } = await import('../src/lib/conversations');
 
 const alice = { userId: 'usr:alice@example.com', owner: 'a'.repeat(32), isService: false };
@@ -110,7 +110,7 @@ describe('handleApi', () => {
 	it('405s unsupported methods', async () => {
 		const res = await call(alice, 'POST', '/api/conversations');
 		expect(res.status).toBe(405);
-		expect(res.headers.get('Allow')).toBe('GET');
+		expect(res.headers.get('Allow')).toBe('GET, DELETE');
 		expect((await call(alice, 'PUT', '/api/conversations/c1')).status).toBe(405);
 	});
 
@@ -121,5 +121,39 @@ describe('handleApi', () => {
 
 	it('404s unknown API paths', async () => {
 		expect((await call(alice, 'GET', '/api/nope')).status).toBe(404);
+	});
+});
+
+describe('delete all my data', () => {
+	const msgs = [{ role: 'user', parts: [{ type: 'text', text: 'hi' }] }];
+
+	it('refuses without the explicit confirmation', async () => {
+		const res = await call(alice, 'DELETE', '/api/conversations');
+		expect(res.status).toBe(400);
+		expect(purged).toEqual([]);
+		expect(await getConversation(currentEnv.DB, alice.owner, 'c1')).not.toBeNull();
+	});
+
+	it("deletes every one of the caller's threads and nobody else's", async () => {
+		await upsertConversation(currentEnv.DB, alice.owner, 'c2', summarize(msgs), 2000);
+		await upsertConversation(currentEnv.DB, alice.owner, 'c3', summarize(msgs), 3000);
+		await upsertConversation(currentEnv.DB, bob.owner, 'b1', summarize(msgs), 1500);
+
+		const res = await call(alice, 'DELETE', '/api/conversations?confirm=all');
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ deleted: 3, remaining: 0 });
+		expect(purged.sort()).toEqual([`${alice.owner}~c1`, `${alice.owner}~c2`, `${alice.owner}~c3`]);
+		expect(await getConversation(currentEnv.DB, alice.owner, 'c2')).toBeNull();
+		expect(await getConversation(currentEnv.DB, bob.owner, 'b1')).not.toBeNull();
+	});
+
+	it('works in batches and reports what remains', async () => {
+		for (let i = 0; i < DELETE_ALL_BATCH + 5; i++) {
+			await upsertConversation(currentEnv.DB, alice.owner, `t${i}`, summarize(msgs), 2000 + i);
+		}
+		const first = await (await call(alice, 'DELETE', '/api/conversations?confirm=all')).json();
+		expect(first).toEqual({ deleted: DELETE_ALL_BATCH, remaining: 6 });
+		const second = await (await call(alice, 'DELETE', '/api/conversations?confirm=all')).json();
+		expect(second).toEqual({ deleted: 6, remaining: 0 });
 	});
 });

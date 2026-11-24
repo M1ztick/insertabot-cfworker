@@ -12,6 +12,12 @@
 			"custom_domain": true,
 		},
 	],
+	// Privacy: keep only what the Worker itself prints, which is scrubbed
+	// (src/lib/redact.ts): method, path, status, timing and error summaries.
+	//  - invocation_logs off: Cloudflare's automatic per-request entry records
+	//    the full request URL, which can carry ?ib_key=, plus request metadata.
+	//  - traces off: spans record subrequest URLs, i.e. MCP server addresses
+	//    with any API key in their query string.
 	"observability": {
 		"enabled": true,
 		"head_sampling_rate": 0.1,
@@ -19,12 +25,11 @@
 			"enabled": true,
 			"head_sampling_rate": 0.1,
 			"persist": true,
-			"invocation_logs": true,
+			"invocation_logs": false,
 		},
 		"traces": {
-			"enabled": true,
-			"persist": true,
-			"head_sampling_rate": 0.1,
+			"enabled": false,
+			"persist": false,
 		},
 	},
 	// NOTE: not_found_handling "single-page-application" with run_worker_first

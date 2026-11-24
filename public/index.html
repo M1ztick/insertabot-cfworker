@@ -8,11 +8,48 @@
 		/>
 		<meta name="theme-color" content="#0e1320" />
 		<title>InsertaBot</title>
-		<link
-			href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap"
-			rel="stylesheet"
-		/>
 		<style>
+			/*
+			 * Fonts are served from this Worker, not Google Fonts: loading them
+			 * from fonts.googleapis.com sent every visitor's IP address to Google
+			 * on each page load. Space Mono and Syne are SIL OFL 1.1 (licences in
+			 * /fonts/), latin subset, from Fontsource.
+			 */
+			@font-face {
+				font-family: 'Space Mono';
+				font-style: normal;
+				font-weight: 400;
+				font-display: swap;
+				src: url('/fonts/space-mono-latin-400-normal.woff2') format('woff2');
+			}
+			@font-face {
+				font-family: 'Space Mono';
+				font-style: normal;
+				font-weight: 700;
+				font-display: swap;
+				src: url('/fonts/space-mono-latin-700-normal.woff2') format('woff2');
+			}
+			@font-face {
+				font-family: 'Syne';
+				font-style: normal;
+				font-weight: 400;
+				font-display: swap;
+				src: url('/fonts/syne-latin-400-normal.woff2') format('woff2');
+			}
+			@font-face {
+				font-family: 'Syne';
+				font-style: normal;
+				font-weight: 600;
+				font-display: swap;
+				src: url('/fonts/syne-latin-600-normal.woff2') format('woff2');
+			}
+			@font-face {
+				font-family: 'Syne';
+				font-style: normal;
+				font-weight: 800;
+				font-display: swap;
+				src: url('/fonts/syne-latin-800-normal.woff2') format('woff2');
+			}
 			:root {
 				--bg: #080b12;
 				--surface: #0e1320;
@@ -715,6 +752,7 @@
 			}
 			.history-action:hover { color: var(--cyan); }
 			.history-action.danger:hover { color: var(--magenta); }
+			.history-wipe { color: var(--magenta); margin-top: 12px; }
 			.history-more {
 				margin-block-start: 6px;
 				align-self: center;
