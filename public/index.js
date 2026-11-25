@@ -763,6 +763,8 @@ async function detectHistory() {
 		const res = await fetch('/health', { credentials: 'same-origin' });
 		const health = await res.json();
 		historyAvailable = !!health?.features?.conversations;
+		// Say where add-ons live only when they really follow the account.
+		document.getElementById('addons-scope').hidden = !health?.features?.accountTools;
 	} catch {
 		historyAvailable = false;
 	}

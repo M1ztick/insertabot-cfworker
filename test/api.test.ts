@@ -141,7 +141,7 @@ describe('delete all my data', () => {
 
 		const res = await call(alice, 'DELETE', '/api/conversations?confirm=all');
 		expect(res.status).toBe(200);
-		expect(await res.json()).toEqual({ deleted: 3, remaining: 0 });
+		expect(await res.json()).toEqual({ deleted: 3, remaining: 0, toolsDeleted: 0 });
 		expect(purged.sort()).toEqual([`${alice.owner}~c1`, `${alice.owner}~c2`, `${alice.owner}~c3`]);
 		expect(await getConversation(currentEnv.DB, alice.owner, 'c2')).toBeNull();
 		expect(await getConversation(currentEnv.DB, bob.owner, 'b1')).not.toBeNull();
@@ -152,8 +152,23 @@ describe('delete all my data', () => {
 			await upsertConversation(currentEnv.DB, alice.owner, `t${i}`, summarize(msgs), 2000 + i);
 		}
 		const first = await (await call(alice, 'DELETE', '/api/conversations?confirm=all')).json();
-		expect(first).toEqual({ deleted: DELETE_ALL_BATCH, remaining: 6 });
+		expect(first).toEqual({ deleted: DELETE_ALL_BATCH, remaining: 6, toolsDeleted: 0 });
 		const second = await (await call(alice, 'DELETE', '/api/conversations?confirm=all')).json();
-		expect(second).toEqual({ deleted: 6, remaining: 0 });
+		expect(second).toEqual({ deleted: 6, remaining: 0, toolsDeleted: 0 });
+	});
+});
+
+describe('delete all also clears account tools', () => {
+	it('removes the tools once no conversation is left, and only the caller\'s', async () => {
+		const { ensureToolsSchema, saveTool, toolsKey, readRegistry } = await import('../src/lib/tools');
+		const key = (await toolsKey('test-secret-value-at-least-16'))!;
+		await ensureToolsSchema(currentEnv.DB);
+		await saveTool(currentEnv.DB, key, alice.owner, { name: 'Tavily', url: 'https://mcp.tavily.com/mcp/', token: null });
+		await saveTool(currentEnv.DB, key, bob.owner, { name: 'GitHub', url: 'https://api.githubcopilot.com/mcp/', token: 'x' });
+
+		const res = await call(alice, 'DELETE', '/api/conversations?confirm=all');
+		expect(await res.json()).toEqual({ deleted: 1, remaining: 0, toolsDeleted: 1 });
+		expect((await readRegistry(currentEnv.DB, key, alice.owner)).known.size).toBe(0);
+		expect((await readRegistry(currentEnv.DB, key, bob.owner)).tools).toHaveLength(1);
 	});
 });
