@@ -22,7 +22,7 @@ Each conversation lives in its own Cloudflare Durable Object and holds:
 - the messages, including any images you attach;
 - notes the assistant saves for that conversation;
 - the model setting (Auto / Research / Coding);
-- the tools (MCP servers) you attached to it, including their addresses and the API keys you entered for them.
+- its live connections to your tools (see below).
 
 ### Your conversation list (kept until you delete the conversation)
 
@@ -31,6 +31,12 @@ So the list can show on every device, a small index in Cloudflare D1 keeps, per 
 - its title (the first line of your first message, up to 80 characters) and a preview (the latest line, up to 140 characters);
 - how many messages it has, and when it was created and last used;
 - an owner key, which is a one-way hash of your sign-in identity, not your email address.
+
+### Your tools (kept until you remove them)
+
+Tools you add (MCP servers such as Tavily or GitHub) belong to your account, so every conversation, on the web and on your phone, can use them. The list is kept in Cloudflare D1 under your hashed owner key: each tool's name, plus its address and API key **encrypted** (AES-256-GCM) with a key only the InsertaBot service holds, so they aren't readable even from Cloudflare's database console. Each open conversation also holds a working connection to your tools, which includes the key.
+
+Removing a tool deletes its address and key and takes it out of every conversation. Its name is kept, so an old conversation can't bring it back by accident.
 
 ### Sign-in (Cloudflare Access)
 
@@ -53,8 +59,9 @@ To keep the service running, the Worker logs a sample of requests: the method, t
 
 ## Your controls
 
-- **Delete a conversation:** from its menu in the app or on the web. This deletes its messages, notes and attached tools on every device.
-- **Delete everything:** "Delete all my conversations" in the app's Settings, or at the bottom of the web app's conversation list. This removes every conversation you own and its stored data.
+- **Delete a conversation:** from its menu in the app or on the web. This deletes its messages and notes on every device. Your tools stay on your account.
+- **Remove a tool:** from the Tools tab in the app or the Add-ons panel on the web. It leaves every conversation, and its address and key are deleted.
+- **Delete everything:** "Delete all my conversations" in the app's Settings, or at the bottom of the web app's conversation list. This removes every conversation you own, its stored data, and your saved tools.
 - **Sign out:** in the app's Settings. This removes your sign-in from the phone.
 
 What's not built yet: exporting your data in a file, and automatic deletion of old conversations. Until then, you can ask for either through the contact above.

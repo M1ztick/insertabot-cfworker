@@ -31,6 +31,7 @@ import {
 	renameConversation,
 } from './conversations';
 import { jsonResponse } from './utils';
+import { deleteAllTools, ensureToolsSchema } from './tools';
 
 export const API_PREFIX = '/api/';
 const COLLECTION = '/api/conversations';
@@ -173,7 +174,8 @@ export async function handleApi(
 
 /**
  * Delete every conversation the caller owns: each thread's Durable Object
- * (messages, memories, attached MCP servers and their keys) and its index row.
+ * (messages, memories, attached MCP servers and their keys) and its index row,
+ * and, once none remain, the account's saved tools.
  * This is the "delete all my data" control.
  *
  * Requires `?confirm=all` so that a client bug sending DELETE to the
@@ -207,5 +209,12 @@ async function deleteAll(
 		);
 	}
 	const remaining = await countConversations(db, owner);
-	return jsonResponse({ deleted, remaining }, 200, { ...cors, 'Cache-Control': 'no-store' });
+	// Once every thread is gone, the account's tools (and their keys) go too.
+	// Last, so a partial run leaves the tools in place for the threads left.
+	let toolsDeleted = 0;
+	if (remaining === 0) {
+		await ensureToolsSchema(db);
+		toolsDeleted = await deleteAllTools(db, owner);
+	}
+	return jsonResponse({ deleted, remaining, toolsDeleted }, 200, { ...cors, 'Cache-Control': 'no-store' });
 }

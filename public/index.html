@@ -809,6 +809,13 @@
 				margin-block-end: 10px;
 			}
 
+			.addons-scope {
+				color: var(--text-muted);
+				font-size: 0.78rem;
+				line-height: 1.5;
+				margin: -4px 0 8px;
+			}
+			.addons-scope[hidden] { display: none; }
 			.addons-empty {
 				color: var(--text-muted);
 				font-size: 0.82rem;
@@ -1331,6 +1338,7 @@
 			<div class="addons-body">
 				<section>
 					<p class="addons-section-title">Connected</p>
+					<p class="addons-scope" id="addons-scope" hidden>Saved to your account: available in every conversation, here and in the app.</p>
 					<div id="addons-servers">
 						<p class="addons-empty">No servers connected yet.</p>
 					</div>

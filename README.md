@@ -123,6 +123,7 @@ when the index is available.
 | `GET` | `/api/conversations/:id` | one entry |
 | `PATCH` | `/api/conversations/:id` | `{"title": "..."}`, which pins the title against auto-titling |
 | `DELETE` | `/api/conversations/:id` | wipes the Durable Object (messages, MCP, memory) and the index row |
+| `DELETE` | `/api/conversations?confirm=all` | "delete all my data": every thread the caller owns, 50 per call; returns `{deleted, remaining, toolsDeleted}`, repeat until `remaining` is 0. The account's tools are deleted once no thread is left. |
 
 To open a conversation, connect the WebSocket to `/agents/chat-agent/:id` as
 before. The agent sends `cf_agent_chat_messages` with the full transcript on
@@ -149,7 +150,8 @@ Deploys to the custom domain configured in `wrangler.jsonc`
 | `SYSTEM_PROMPT` | `wrangler.jsonc` → `vars` | Override with `wrangler secret put SYSTEM_PROMPT` for a value that shouldn't be committed. |
 | Model lanes | `src/lib/durable.ts` → `MODEL_LANES` | Add/rename lanes and the heuristic in `inferLane()` here. |
 | Context window | `src/lib/context.ts` → `DEFAULT_CONTEXT_WINDOW` | `maxTokens` is the replayed-history budget; `minRecentMessages` is a floor so one huge message cannot starve the window; `maxMessages` is a hard cap. Raise `maxTokens` for longer recall at higher cost per turn. |
-| MCP servers | Runtime, via the Add-ons UI | Nothing to configure ahead of time — each browser session connects its own servers, persisted per Durable Object instance. |
+| MCP servers | Runtime, via the Add-ons UI or the app's Tools tab | Per **account** when `TOOLS_ENCRYPTION_KEY` is set (below); otherwise per conversation. |
+| `TOOLS_ENCRYPTION_KEY` | `wrangler secret put TOOLS_ENCRYPTION_KEY` | Turns on account-level tools: a tool added in any conversation, on any client, is attached to every conversation of that user. The list lives in D1 (`account_tools`, migration `0002`), with each tool's URL and key sealed with AES-GCM under this secret, because D1 rows are readable from the dashboard console. Use a random value: `openssl rand -base64 32`. Rotating it makes saved tools unreadable (they are skipped, and re-adding a tool replaces it). `/health` reports `features.accountTools`. |
 
 ## Notes for future changes
 
